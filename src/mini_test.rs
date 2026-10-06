@@ -879,6 +879,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Protobuf Roundtrip",
             func: run_vector_protobuf_roundtrip,
         },
+        RegisteredTest {
+            group: "Vector",
+            name: "Flattened",
+            func: run_vector_flattened,
+        },
         // Tolerance tests
         RegisteredTest {
             group: "Tolerance",
@@ -1417,6 +1422,56 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Is Locked Round Trip",
             func: run_polyline_is_locked_round_trip,
         },
+        RegisteredTest {
+            group: "Polyline",
+            name: "From Planes",
+            func: run_polyline_from_planes,
+        },
+        RegisteredTest {
+            group: "Polyline",
+            name: "Open Points",
+            func: run_polyline_open_points,
+        },
+        RegisteredTest {
+            group: "Polyline",
+            name: "Area",
+            func: run_polyline_area,
+        },
+        RegisteredTest {
+            group: "Polyline",
+            name: "Area Centroid",
+            func: run_polyline_area_centroid,
+        },
+        RegisteredTest {
+            group: "Polyline",
+            name: "Clip By Plane",
+            func: run_polyline_clip_by_plane,
+        },
+        RegisteredTest {
+            group: "Polyline",
+            name: "Offset Toward",
+            func: run_polyline_offset_toward,
+        },
+        RegisteredTest {
+            group: "Polyline",
+            name: "Extended",
+            func: run_polyline_extended,
+        },
+        RegisteredTest {
+            group: "Polyline",
+            name: "Trimmed",
+            func: run_polyline_trimmed,
+        },
+        RegisteredTest {
+            group: "Polyline",
+            name: "Trimmed Alike",
+            func: run_polyline_trimmed_alike,
+        },
+        RegisteredTest {
+            group: "Polyline",
+            name: "Overlap",
+            func: run_polyline_overlap,
+        },
         // Plane tests
         RegisteredTest {
             group: "Plane",
@@ -1512,6 +1567,26 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Plane",
             name: "Is Locked Round Trip",
             func: run_plane_is_locked_round_trip,
+        },
+        RegisteredTest {
+            group: "Plane",
+            name: "From Line",
+            func: run_plane_from_line,
+        },
+        RegisteredTest {
+            group: "Plane",
+            name: "Moved To",
+            func: run_plane_moved_to,
+        },
+        RegisteredTest {
+            group: "Plane",
+            name: "Signed Distance",
+            func: run_plane_signed_distance,
+        },
+        RegisteredTest {
+            group: "Plane",
+            name: "Xy Plane At",
+            func: run_plane_xy_plane_at,
         },
         // PointCloud tests
         RegisteredTest {
@@ -2747,6 +2822,16 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Boxes Closest",
             func: run_closest_boxes_closest,
         },
+        RegisteredTest {
+            group: "Closest",
+            name: "Segment Segment",
+            func: run_closest_segment_segment,
+        },
+        RegisteredTest {
+            group: "Closest",
+            name: "Triangle Point",
+            func: run_closest_triangle_point,
+        },
         // Primitives tests
         RegisteredTest {
             group: "Primitives",
@@ -3273,6 +3358,21 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Intersection",
             name: "Line Line Classified",
             func: run_intersection_line_line_classified,
+        },
+        RegisteredTest {
+            group: "Intersection",
+            name: "Plane Plane Optional",
+            func: run_intersection_plane_plane_optional,
+        },
+        RegisteredTest {
+            group: "Intersection",
+            name: "Line Plane Optional",
+            func: run_intersection_line_plane_optional,
+        },
+        RegisteredTest {
+            group: "Intersection",
+            name: "Plane Plane Plane Optional",
+            func: run_intersection_plane_plane_plane_optional,
         },
         // Session tests
         RegisteredTest {
@@ -3834,6 +3934,21 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Session",
             name: "Merge Keeps Feature Guids",
             func: run_session_merge_keeps_feature_guids,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Add Group Parent",
+            func: run_session_add_group_parent,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Group Named",
+            func: run_session_group_named,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Set Node Color Descendants",
+            func: run_session_set_node_color_descendants,
         },
         // History tests
         RegisteredTest {

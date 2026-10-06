@@ -1143,6 +1143,37 @@ impl Closest {
         (closest, t, dist)
     }
 
+    /// Return the parameters in [0, 1] on both segments and the distance of their closest approach.
+    pub fn segment_segment(s: &Line, t: &Line) -> (f64, f64, f64) {
+        let d1 = s.to_vector();
+        let d2 = t.to_vector();
+        let r = &s.start() - &t.start();
+        let a = d1.dot(&d1);
+        let e = d2.dot(&d2);
+        let f = d2.dot(&r);
+        let c = d1.dot(&r);
+        let b = d1.dot(&d2);
+        let denominator = a * e - b * b;
+        let mut u = if denominator > 1e-12 {
+            ((b * f - c * e) / denominator).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let mut v = (b * u + f) / e;
+
+        if v < 0.0 {
+            v = 0.0;
+            u = (-c / a).clamp(0.0, 1.0);
+        } else if v > 1.0 {
+            v = 1.0;
+            u = ((b - c) / a).clamp(0.0, 1.0);
+        }
+
+        let distance = (&(&s.start() + &(&d1 * u)) - &(&t.start() + &(&d2 * v))).magnitude();
+
+        (u, v, distance)
+    }
+
     /// Return the closest point, length parameter in [0, 1] and distance on a polyline.
     pub fn polyline_point(polyline: &Polyline, test_point: &Point) -> (Point, f64, f64) {
         let points = polyline.get_points();
@@ -1264,6 +1295,38 @@ impl Closest {
     // ═══════════════════════════════════════════════════════════════════════════
     // Meshes and clouds
     // ═══════════════════════════════════════════════════════════════════════════
+    /// Return the distance from point to the triangle a b c, to its nearest edge when degenerate.
+    pub fn triangle_point(a: &Point, b: &Point, c: &Point, point: &Point) -> f64 {
+        let tri = [a, b, c];
+        let n = (b - a).cross(&(c - a));
+        let area = n.magnitude();
+
+        if area >= 1e-12 {
+            let unit = &n * (1.0 / area);
+            let height = (point - a).dot(&unit);
+            let q = point - &(&unit * height);
+            let mut inside = true;
+
+            for i in 0..3 {
+                inside =
+                    inside && (tri[(i + 1) % 3] - tri[i]).cross(&(&q - tri[i])).dot(&unit) >= 0.0;
+            }
+
+            if inside {
+                return height.abs();
+            }
+        }
+
+        let mut best: f64 = 1e300;
+
+        for i in 0..3 {
+            let edge = Line::from_points(tri[i], tri[(i + 1) % 3]);
+            best = best.min((point - &edge.closest_point(point, true).1).magnitude());
+        }
+
+        best
+    }
+
     /// Return the closest point, face key and distance on a mesh via its triangle BVH.
     pub fn mesh_point(mesh: &mut Mesh, test_point: &Point) -> (Point, usize, f64) {
         let mut best_point = Point::new(0.0, 0.0, 0.0);

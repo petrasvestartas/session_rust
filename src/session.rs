@@ -1815,10 +1815,36 @@ impl Session {
 
     /// Create a named group (TreeNode) and add it to the root of the tree.
     pub fn add_group(&mut self, group_name: &str) -> Rc<RefCell<TreeNode>> {
+        self.add_group_with(group_name, None)
+    }
+
+    /// Create a named group (TreeNode) under parent, the root when none is given.
+    pub fn add_group_with(
+        &mut self,
+        group_name: &str,
+        parent: Option<&Rc<RefCell<TreeNode>>>,
+    ) -> Rc<RefCell<TreeNode>> {
         let node = TreeNode::new(group_name);
-        self.add(&node, None);
+        self.add(&node, parent);
 
         node
+    }
+
+    /// Return the live child of parent (the root when none is given) named name, added as a group after its other children the first time.
+    pub fn group_named(
+        &mut self,
+        name: &str,
+        parent: Option<&Rc<RefCell<TreeNode>>>,
+    ) -> Rc<RefCell<TreeNode>> {
+        if let Some(host) = parent.cloned().or_else(|| self.tree.root()) {
+            for child in host.borrow().children() {
+                if child.borrow().name == name {
+                    return child;
+                }
+            }
+        }
+
+        self.add_group_with(name, parent)
     }
 
     /// Rename a group node; false for an object node, a dead node or the same name.
@@ -1857,6 +1883,16 @@ impl Session {
 
     /// Set or clear (None) the display colour of a node; false for a dead node.
     pub fn set_node_color(&mut self, node: &Rc<RefCell<TreeNode>>, color: Option<Color>) -> bool {
+        self.set_node_color_with(node, color, false)
+    }
+
+    /// Set or clear (None) the display colour of a node and, with descendants, of every node nested under it; false for a dead node.
+    pub fn set_node_color_with(
+        &mut self,
+        node: &Rc<RefCell<TreeNode>>,
+        color: Option<Color>,
+        descendants: bool,
+    ) -> bool {
         if node.borrow().is_dead() {
             return false;
         }
@@ -1877,12 +1913,20 @@ impl Session {
                     name.clone(),
                     name,
                     before,
-                    color,
+                    color.clone(),
                     false,
                     false,
                 )),
                 RECORD,
             );
+        }
+
+        if descendants {
+            let nested = node.borrow().descendants();
+
+            for child in &nested {
+                self.set_node_color(child, color.clone());
+            }
         }
 
         true

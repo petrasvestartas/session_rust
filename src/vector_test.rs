@@ -524,6 +524,20 @@ pub fn run_vector_protobuf_roundtrip() -> TestResult {
     })
 }
 
+pub fn run_vector_flattened() -> TestResult {
+    MINI_TEST!("Flattened", {
+        use crate::Vector;
+
+        let v = Vector::new(1.0, 2.0, 3.0);
+        let flat = v.flattened();
+
+        MINI_CHECK!(TOLERANCE.is_close(flat[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(flat[1], 2.0));
+        MINI_CHECK!(flat[2] == 0.0);
+        MINI_CHECK!(TOLERANCE.is_close(v[2], 3.0));
+    })
+}
+
 REGISTER_MINI_TEST!(
     "Vector",
     "Constructor",
@@ -609,4 +623,9 @@ REGISTER_MINI_TEST!(
     "Vector",
     "Protobuf Roundtrip",
     crate::vector_test::run_vector_protobuf_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "Vector",
+    "Flattened",
+    crate::vector_test::run_vector_flattened
 );

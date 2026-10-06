@@ -2666,6 +2666,73 @@ pub fn run_intersection_line_line_classified() -> TestResult {
     })
 }
 
+pub fn run_intersection_plane_plane_optional() -> TestResult {
+    MINI_TEST!("Plane Plane Optional", {
+        use crate::intersection;
+        use crate::Plane;
+        use crate::Vector;
+
+        let xy = Plane::xy_plane();
+        let xz = Plane::xz_plane();
+        let line = intersection::plane_plane(&xy, &xz);
+        let parallel = intersection::plane_plane(&xy, &(xy.clone() + Vector::new(0.0, 0.0, 1.0)));
+
+        MINI_CHECK!(line.is_some());
+        MINI_CHECK!(TOLERANCE.is_close(line.unwrap().to_direction()[0].abs(), 1.0));
+        MINI_CHECK!(parallel.is_none());
+    })
+}
+
+pub fn run_intersection_line_plane_optional() -> TestResult {
+    MINI_TEST!("Line Plane Optional", {
+        use crate::intersection;
+        use crate::Line;
+        use crate::Plane;
+        use crate::Point;
+        use crate::Vector;
+
+        let plane =
+            Plane::from_point_normal(Point::new(0.0, 0.0, 1.0), Vector::new(0.0, 0.0, 1.0), None);
+        let line = Line::new(0.0, 0.0, 0.0, 0.0, 0.0, 2.0);
+        let short_line = Line::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.5);
+        let flat = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+        let hit = intersection::line_plane(&line, &plane, true);
+        let beyond = intersection::line_plane(&short_line, &plane, false);
+
+        MINI_CHECK!(hit.is_some());
+        MINI_CHECK!(TOLERANCE.is_close(hit.unwrap()[2], 1.0));
+        MINI_CHECK!(intersection::line_plane(&short_line, &plane, true).is_none());
+        MINI_CHECK!(beyond.is_some());
+        MINI_CHECK!(TOLERANCE.is_close(beyond.unwrap()[2], 1.0));
+        MINI_CHECK!(intersection::line_plane(&flat, &plane, false).is_none());
+    })
+}
+
+pub fn run_intersection_plane_plane_plane_optional() -> TestResult {
+    MINI_TEST!("Plane Plane Plane Optional", {
+        use crate::intersection;
+        use crate::Plane;
+        use crate::Point;
+        use crate::Vector;
+
+        let xy =
+            Plane::from_point_normal(Point::new(0.0, 0.0, 3.0), Vector::new(0.0, 0.0, 1.0), None);
+        let yz =
+            Plane::from_point_normal(Point::new(1.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0), None);
+        let xz =
+            Plane::from_point_normal(Point::new(0.0, 2.0, 0.0), Vector::new(0.0, 1.0, 0.0), None);
+        let corner = intersection::plane_plane_plane(&xy, &yz, &xz);
+        let parallel =
+            intersection::plane_plane_plane(&xy, &yz, &(xy.clone() + Vector::new(0.0, 0.0, 1.0)));
+
+        MINI_CHECK!(corner.is_some());
+        MINI_CHECK!(TOLERANCE.is_close(corner.clone().unwrap()[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(corner.clone().unwrap()[1], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(corner.unwrap()[2], 3.0));
+        MINI_CHECK!(parallel.is_none());
+    })
+}
+
 REGISTER_MINI_TEST!(
     "Intersection",
     "Line Line",
@@ -3030,4 +3097,19 @@ REGISTER_MINI_TEST!(
     "Intersection",
     "Line Line Classified",
     crate::intersection_test::run_intersection_line_line_classified
+);
+REGISTER_MINI_TEST!(
+    "Intersection",
+    "Plane Plane Optional",
+    crate::intersection_test::run_intersection_plane_plane_optional
+);
+REGISTER_MINI_TEST!(
+    "Intersection",
+    "Line Plane Optional",
+    crate::intersection_test::run_intersection_line_plane_optional
+);
+REGISTER_MINI_TEST!(
+    "Intersection",
+    "Plane Plane Plane Optional",
+    crate::intersection_test::run_intersection_plane_plane_plane_optional
 );

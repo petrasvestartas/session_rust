@@ -475,3 +475,85 @@ REGISTER_MINI_TEST!(
     "Is Locked Round Trip",
     crate::plane_test::run_plane_is_locked_round_trip
 );
+
+pub fn run_plane_from_line() -> TestResult {
+    MINI_TEST!("From Line", {
+        use crate::Line;
+        use crate::Plane;
+        use crate::Vector;
+
+        let line = Line::new(0.0, 0.0, 0.0, 2.0, 0.0, 0.0);
+        let back = Line::new(2.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+        let pl = Plane::from_line(&line, &Vector::new(0.0, 0.0, 1.0));
+        let flipped = Plane::from_line(&back, &Vector::new(0.0, 0.0, 1.0));
+
+        MINI_CHECK!(TOLERANCE.is_close(pl.origin()[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl.z_axis()[0], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl.z_axis()[1], -1.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl.z_axis()[2], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(flipped.z_axis()[1], 1.0));
+    })
+}
+
+REGISTER_MINI_TEST!("Plane", "From Line", crate::plane_test::run_plane_from_line);
+
+pub fn run_plane_moved_to() -> TestResult {
+    MINI_TEST!("Moved To", {
+        use crate::Plane;
+        use crate::Point;
+        use crate::Vector;
+
+        let pl =
+            Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(1.0, 1.0, 0.0), None);
+        let moved = pl.moved_to(&Point::new(5.0, 0.0, 0.0));
+        let same = pl.moved_to(&Point::new(0.0, 0.0, 3.0));
+
+        MINI_CHECK!(TOLERANCE.is_close(moved.origin()[0], 5.0));
+        MINI_CHECK!(TOLERANCE.is_close(moved.x_axis()[2], pl.x_axis()[2]));
+        MINI_CHECK!(TOLERANCE.is_close(moved.z_axis()[0], pl.z_axis()[0]));
+        MINI_CHECK!(TOLERANCE.is_close(moved.d() * moved.d(), 12.5));
+        MINI_CHECK!(Plane::is_coplanar(&pl, &same, true));
+    })
+}
+
+REGISTER_MINI_TEST!("Plane", "Moved To", crate::plane_test::run_plane_moved_to);
+
+pub fn run_plane_signed_distance() -> TestResult {
+    MINI_TEST!("Signed Distance", {
+        use crate::Plane;
+        use crate::Point;
+        use crate::Vector;
+
+        let pl =
+            Plane::from_point_normal(Point::new(0.0, 0.0, 1.0), Vector::new(0.0, 0.0, 2.0), None);
+
+        MINI_CHECK!(TOLERANCE.is_close(pl.signed_distance(&Point::new(3.0, 4.0, 5.0)), 4.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl.signed_distance(&Point::new(3.0, 4.0, -1.0)), -2.0));
+        MINI_CHECK!(pl.signed_distance(&Point::new(3.0, 4.0, 1.0)) == 0.0);
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Plane",
+    "Signed Distance",
+    crate::plane_test::run_plane_signed_distance
+);
+
+pub fn run_plane_xy_plane_at() -> TestResult {
+    MINI_TEST!("Xy Plane At", {
+        use crate::Plane;
+
+        let pl = Plane::xy_plane_at(2.5);
+
+        MINI_CHECK!(TOLERANCE.is_close(pl.origin()[2], 2.5));
+        MINI_CHECK!(TOLERANCE.is_close(pl.z_axis()[2], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(pl.d(), -2.5));
+        MINI_CHECK!(Plane::xy_plane_at(0.0) == Plane::xy_plane());
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Plane",
+    "Xy Plane At",
+    crate::plane_test::run_plane_xy_plane_at
+);

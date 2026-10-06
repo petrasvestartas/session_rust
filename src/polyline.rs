@@ -358,6 +358,26 @@ impl Polyline {
         Self::new(points)
     }
 
+    /// Construct the closed polygon whose corner i is where sides i and i + 1 meet base; None when three of them share no point.
+    pub fn from_planes(sides: &[Plane], base: &Plane) -> Option<Self> {
+        let n = sides.len();
+        let mut points = Vec::new();
+
+        for i in 0..n {
+            points.push(crate::intersection::plane_plane_plane(
+                &sides[i],
+                &sides[(i + 1) % n],
+                base,
+            )?);
+        }
+
+        if points.is_empty() {
+            return Some(Self::new(points));
+        }
+
+        Some(Self::new(points).closed())
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // Accessors
     // ═══════════════════════════════════════════════════════════════════════════
@@ -550,6 +570,17 @@ impl Polyline {
         Self::from_coords(coords)
     }
 
+    /// Return the points without the closing duplicate.
+    pub fn open_points(&self) -> Vec<Point> {
+        let mut points = self.get_points();
+
+        if self.is_closed() {
+            points.pop();
+        }
+
+        points
+    }
+
     /// Return the average of the points, closing duplicate excluded.
     pub fn center(&self) -> Point {
         if self.coords.is_empty() {
@@ -572,6 +603,38 @@ impl Polyline {
         }
 
         Point::new(x / n as f64, y / n as f64, z / n as f64)
+    }
+
+    /// Return the area of the planar polygon.
+    pub fn area(&self) -> f64 {
+        let points = self.open_points();
+        let mut twice = Vector::new(0.0, 0.0, 0.0);
+
+        for i in 1..points.len().saturating_sub(1) {
+            twice += (&points[i] - &points[0]).cross(&(&points[i + 1] - &points[0]));
+        }
+
+        0.5 * twice.magnitude()
+    }
+
+    /// Return the area centroid of the planar polygon.
+    pub fn area_centroid(&self) -> Point {
+        let points = self.open_points();
+        let n = points.len();
+        let normal = Self::newell_normal(&points).normalized();
+        let origin = &points[0];
+        let mut sum = Vector::new(0.0, 0.0, 0.0);
+        let mut area = 0.0;
+
+        for i in 1..n - 1 {
+            let weight = (&points[i] - origin)
+                .cross(&(&points[i + 1] - origin))
+                .dot(&normal);
+            sum += (&(&points[i] - origin) + &(&points[i + 1] - origin)) * (weight / 3.0);
+            area += weight;
+        }
+
+        origin + &(&sum / area)
     }
 
     /// Compute the frame with origin at center, x along the first segment, z the average normal.
@@ -1071,6 +1134,34 @@ impl Polyline {
         cut
     }
 
+    /// Return the closed polygon clipped to the side plane's normal points to, empty when nothing is left.
+    pub fn clip_by_plane(&self, plane: &Plane) -> Self {
+        let points = self.open_points();
+        let n = points.len();
+        let mut result = Vec::new();
+
+        for i in 0..n {
+            let a = &points[i];
+            let b = &points[(i + 1) % n];
+            let da = plane.signed_distance(a);
+            let db = plane.signed_distance(b);
+
+            if da >= 0.0 {
+                result.push(a.clone());
+            }
+
+            if (da >= 0.0) != (db >= 0.0) {
+                result.push(a + &(&(b - a) * (da / (da - db))));
+            }
+        }
+
+        if result.is_empty() {
+            return Polyline::new(result);
+        }
+
+        Polyline::new(result).closed()
+    }
+
     /// Return the loop closed with side i moved right of its direction in xy by distances[i], outwards for a counter-clockwise loop; corners mitred, the larger distance where two sides are parallel; empty for fewer than three corners or distances than sides.
     pub fn offset_sides(&self, distances: &[f64]) -> Polyline {
         let mut points = self.get_points();
@@ -1124,6 +1215,107 @@ impl Polyline {
         result.push(result[0].clone());
 
         Polyline::new(result)
+    }
+
+    /// Return the copy with each segment moved by distance across it in the plane of the segment and up, the ends kept on the end planes; None when three planes share no point.
+    pub fn offset_toward(&self, distance: f64, up: &Vector) -> Option<Polyline> {
+        let points = self.get_points();
+        let n = points.len();
+
+        if n < 2 {
+            return Some(self.duplicate());
+        }
+
+        let mut planes = vec![Plane::from_point_normal(
+            points[0].clone(),
+            &points[1] - &points[0],
+            None,
+        )];
+
+        for i in 0..n - 1 {
+            let line = Line::from_points(&points[i], &points[i + 1]);
+            let x = line.to_direction();
+            let y = up.cross(&x);
+            planes.push(
+                Plane::from_point_normal(line.center(), x.cross(&y), None)
+                    .translate_by_normal(distance),
+            );
+        }
+
+        planes.push(Plane::from_point_normal(
+            points[n - 1].clone(),
+            &points[n - 2] - &points[n - 1],
+            None,
+        ));
+
+        let base = Plane::from_point_normal(
+            points[0].clone(),
+            up.cross(&(&points[n - 1] - &points[0])),
+            None,
+        );
+        let mut result = Vec::new();
+
+        for i in 0..planes.len() - 1 {
+            result.push(crate::intersection::plane_plane_plane(
+                &planes[i],
+                &planes[i + 1],
+                &base,
+            )?);
+        }
+
+        Some(Polyline::new(result))
+    }
+
+    /// Return a copy with the first point pushed out by start and the last by end along their segments.
+    pub fn extended(&self, start: f64, end: f64) -> Polyline {
+        let mut points = self.get_points();
+        let n = points.len();
+
+        if n < 2 {
+            return self.duplicate();
+        }
+
+        points[0] = &points[0] + &((&points[0] - &points[1]).normalized() * start);
+        points[n - 1] = &points[n - 1] + &((&points[n - 1] - &points[n - 2]).normalized() * end);
+
+        Polyline::new(points)
+    }
+
+    /// Return the copy extended by extension at both ends and cut by both planes, each keeping the side of the original center.
+    pub fn trimmed(&self, plane0: &Plane, plane1: &Plane, extension: f64) -> Polyline {
+        let middle = self.center();
+
+        self.extended(extension, extension)
+            .cut_by_plane(plane0, Some(plane0.signed_distance(&middle) >= 0.0))
+            .cut_by_plane(plane1, Some(plane1.signed_distance(&middle) >= 0.0))
+    }
+
+    /// Return the polygon both closed polygons share on plane, in this winding from the corner nearest this first point, closed; this polygon when they share nothing or all of it.
+    pub fn overlap(&self, other: &Polyline, plane: &Plane) -> Polyline {
+        let lp = self.open_points();
+        let shared = Self::boolean_op(self, other, 0, Some(plane));
+
+        if shared.is_empty() || (shared[0].area() - self.area()).abs() <= 1e-6 * self.area() {
+            return self.closed();
+        }
+
+        let mut points = shared[0].open_points();
+
+        if Self::newell_normal(&points).dot(&Self::newell_normal(&lp)) < 0.0 {
+            points.reverse();
+        }
+
+        let mut nearest = 0;
+
+        for i in 1..points.len() {
+            if points[i].distance(&lp[0], None) < points[nearest].distance(&lp[0], None) {
+                nearest = i;
+            }
+        }
+
+        points.rotate_left(nearest);
+
+        Polyline::new(points).closed()
     }
 }
 
@@ -1728,6 +1920,56 @@ impl Polyline {
             &best_extents,
             best_angle,
         ))
+    }
+
+    /// Return polylines of one vertex count extended by extension and cut on the segments the first crosses, so quads between them stay quads; None on mixed counts or a missed plane.
+    pub fn trimmed_alike(
+        polylines: &[Polyline],
+        plane0: &Plane,
+        plane1: &Plane,
+        extension: f64,
+    ) -> Option<Vec<Polyline>> {
+        if polylines.is_empty() {
+            return Some(Vec::new());
+        }
+
+        let first = polylines[0].extended(extension, extension).get_points();
+        let a = Self::crossed_segment(&first, plane0);
+        let b = Self::crossed_segment(&first, plane1);
+
+        if a == first.len() || b == first.len() {
+            return None;
+        }
+
+        let start = a.min(b);
+        let end = a.max(b);
+        let cut0 = if a <= b { plane0 } else { plane1 };
+        let cut1 = if a <= b { plane1 } else { plane0 };
+        let mut result = Vec::new();
+
+        for polyline in polylines {
+            if polyline.point_count() != polylines[0].point_count() {
+                return None;
+            }
+
+            let points = polyline.extended(extension, extension).get_points();
+            let head = crate::intersection::line_plane(
+                &Line::from_points(&points[start], &points[start + 1]),
+                cut0,
+                false,
+            )?;
+            let tail = crate::intersection::line_plane(
+                &Line::from_points(&points[end], &points[end + 1]),
+                cut1,
+                false,
+            )?;
+            let mut kept = vec![head];
+            kept.extend_from_slice(&points[start + 1..end + 1]);
+            kept.push(tail);
+            result.push(Polyline::new(kept));
+        }
+
+        Some(result)
     }
 
     /// Return a grid of interior points spaced div_dist, on the polygon miter-offset by offset_dist.
@@ -2472,6 +2714,32 @@ impl Polyline {
         }
 
         (best_sq < f64::INFINITY, edge_i, edge_j)
+    }
+
+    /// Return Newell's unit normal of the loop through points, the closing edge included.
+    fn newell_normal(points: &[Point]) -> Vector {
+        let n = points.len();
+        let zero = Point::new(0.0, 0.0, 0.0);
+        let mut normal = Vector::new(0.0, 0.0, 0.0);
+
+        for i in 0..n {
+            normal += (&points[i] - &zero).cross(&(&points[(i + 1) % n] - &zero));
+        }
+
+        normal.normalized()
+    }
+
+    /// Return the first segment whose ends lie on both sides of plane, points.len() when none.
+    fn crossed_segment(points: &[Point], plane: &Plane) -> usize {
+        for i in 0..points.len().saturating_sub(1) {
+            if (plane.signed_distance(&points[i]) >= 0.0)
+                != (plane.signed_distance(&points[i + 1]) >= 0.0)
+            {
+                return i;
+            }
+        }
+
+        points.len()
     }
 
     /// Return pl projected into plane's local frame as 2D.

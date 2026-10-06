@@ -513,6 +513,11 @@ impl Vector {
         angle
     }
 
+    /// Return a copy with z set to zero.
+    pub fn flattened(&self) -> Vector {
+        Vector::new(self._x, self._y, 0.0)
+    }
+
     /// Return the projection onto projection_vector: (projection, projected length, perpendicular, perpendicular length).
     pub fn projection(
         &self,

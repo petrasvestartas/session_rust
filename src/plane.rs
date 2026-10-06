@@ -1,6 +1,7 @@
 use crate::tolerance::Tolerance;
 use crate::tolerance::TOLERANCE;
 use crate::Color;
+use crate::Line;
 use crate::Point;
 use crate::Polyline;
 use crate::Vector;
@@ -341,6 +342,11 @@ impl Plane {
         Self::from_frame(point1, x_axis, y_axis, z_axis)
     }
 
+    /// Construct the plane through the line containing along, normal the line direction × along.
+    pub fn from_line(line: &Line, along: &Vector) -> Self {
+        Self::from_point_normal(line.center(), line.to_direction().cross(along), None)
+    }
+
     /// Construct an all-zero frame that fails is_valid().
     pub fn invalid() -> Self {
         Self::from_frame(
@@ -388,6 +394,11 @@ impl Plane {
         plane.name = "xz_plane".to_string();
 
         plane
+    }
+
+    /// Construct the world XY plane lifted to z.
+    pub fn xy_plane_at(z: f64) -> Self {
+        Self::xy_plane() + Vector::new(0.0, 0.0, z)
     }
 }
 
@@ -624,6 +635,16 @@ impl Plane {
         )
     }
 
+    /// Return the parallel plane through point, axes kept.
+    pub fn moved_to(&self, point: &Point) -> Plane {
+        Plane::from_frame(
+            point.clone(),
+            self._x_axis.clone(),
+            self._y_axis.clone(),
+            self._z_axis.clone(),
+        )
+    }
+
     /// Return the orthogonal projection of p onto the plane.
     pub fn project(&self, p: &Point) -> Point {
         let dist = self._a * p[0] + self._b * p[1] + self._c * p[2] + self._d;
@@ -673,6 +694,11 @@ impl Plane {
         } else {
             value * value
         }
+    }
+
+    /// Return the distance from point along the z axis, negative below.
+    pub fn signed_distance(&self, point: &Point) -> f64 {
+        (point - &self._origin).dot(&self._z_axis)
     }
 
     /// Return the canonical in-plane axis from the normal alone: zero the smallest normal coordinate, negate-swap the other two.

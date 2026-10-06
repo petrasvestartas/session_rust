@@ -1576,3 +1576,376 @@ REGISTER_MINI_TEST!(
     "Is Locked Round Trip",
     crate::polyline_test::run_polyline_is_locked_round_trip
 );
+
+pub fn run_polyline_from_planes() -> TestResult {
+    MINI_TEST!("From Planes", {
+        use crate::Plane;
+        use crate::Point;
+        use crate::Polyline;
+        use crate::Vector;
+
+        let base =
+            Plane::from_point_normal(Point::new(0.0, 0.0, 1.0), Vector::new(0.0, 0.0, 1.0), None);
+        let sides = vec![
+            Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(-1.0, 0.0, 0.0), None),
+            Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, -1.0, 0.0), None),
+            Plane::from_point_normal(Point::new(2.0, 2.0, 0.0), Vector::new(1.0, 0.0, 0.0), None),
+            Plane::from_point_normal(Point::new(2.0, 2.0, 0.0), Vector::new(0.0, 1.0, 0.0), None),
+        ];
+        let square = Polyline::from_planes(&sides, &base).unwrap();
+        let parallel = Polyline::from_planes(
+            &[sides[0].clone(), sides[2].clone(), sides[1].clone()],
+            &base,
+        )
+        .is_none();
+
+        MINI_CHECK!(square.point_count() == 5);
+        MINI_CHECK!(square.is_closed());
+        MINI_CHECK!(TOLERANCE.is_close(square.get_point(1).unwrap()[0], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(square.get_point(1).unwrap()[1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(square.get_point(1).unwrap()[2], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(square.get_point(3).unwrap()[1], 2.0));
+        MINI_CHECK!(parallel);
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Polyline",
+    "From Planes",
+    crate::polyline_test::run_polyline_from_planes
+);
+
+pub fn run_polyline_open_points() -> TestResult {
+    MINI_TEST!("Open Points", {
+        use crate::Point;
+        use crate::Polyline;
+
+        let square = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(2.0, 2.0, 0.0),
+            Point::new(0.0, 2.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+        ]);
+        let path = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(2.0, 2.0, 0.0),
+        ]);
+
+        MINI_CHECK!(square.open_points().len() == 4);
+        MINI_CHECK!(TOLERANCE.is_close(square.open_points()[3][1], 2.0));
+        MINI_CHECK!(path.open_points().len() == 3);
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Polyline",
+    "Open Points",
+    crate::polyline_test::run_polyline_open_points
+);
+
+pub fn run_polyline_area() -> TestResult {
+    MINI_TEST!("Area", {
+        use crate::Point;
+        use crate::Polyline;
+
+        let square = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(2.0, 2.0, 0.0),
+            Point::new(0.0, 2.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+        ]);
+        let standing = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(4.0, 0.0, 0.0),
+            Point::new(0.0, 0.0, 3.0),
+        ]);
+        let segment = Polyline::new(vec![Point::new(0.0, 0.0, 0.0), Point::new(4.0, 0.0, 0.0)]);
+
+        MINI_CHECK!(TOLERANCE.is_close(square.area(), 4.0));
+        MINI_CHECK!(TOLERANCE.is_close(standing.area(), 6.0));
+        MINI_CHECK!(segment.area() == 0.0);
+    })
+}
+
+REGISTER_MINI_TEST!("Polyline", "Area", crate::polyline_test::run_polyline_area);
+
+pub fn run_polyline_area_centroid() -> TestResult {
+    MINI_TEST!("Area Centroid", {
+        use crate::Point;
+        use crate::Polyline;
+
+        let shape = Polyline::new(vec![
+            Point::new(0.0, 0.0, 2.0),
+            Point::new(4.0, 0.0, 2.0),
+            Point::new(4.0, 1.0, 2.0),
+            Point::new(1.0, 1.0, 2.0),
+            Point::new(1.0, 3.0, 2.0),
+            Point::new(0.0, 3.0, 2.0),
+            Point::new(0.0, 0.0, 2.0),
+        ]);
+        let centroid = shape.area_centroid();
+        let reversed = shape.reversed().area_centroid();
+
+        MINI_CHECK!(TOLERANCE.is_close(centroid[0], 1.5));
+        MINI_CHECK!(TOLERANCE.is_close(centroid[1], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(centroid[2], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(reversed[0], 1.5));
+        MINI_CHECK!(TOLERANCE.is_close(reversed[1], 1.0));
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Polyline",
+    "Area Centroid",
+    crate::polyline_test::run_polyline_area_centroid
+);
+
+pub fn run_polyline_clip_by_plane() -> TestResult {
+    MINI_TEST!("Clip By Plane", {
+        use crate::Plane;
+        use crate::Point;
+        use crate::Polyline;
+        use crate::Vector;
+
+        let square = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(2.0, 2.0, 0.0),
+            Point::new(0.0, 2.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+        ]);
+        let half = square.clip_by_plane(&Plane::from_point_normal(
+            Point::new(1.0, 0.0, 0.0),
+            Vector::new(1.0, 0.0, 0.0),
+            None,
+        ));
+        let all = square.clip_by_plane(&Plane::from_point_normal(
+            Point::new(-1.0, 0.0, 0.0),
+            Vector::new(1.0, 0.0, 0.0),
+            None,
+        ));
+        let none = square.clip_by_plane(&Plane::from_point_normal(
+            Point::new(3.0, 0.0, 0.0),
+            Vector::new(1.0, 0.0, 0.0),
+            None,
+        ));
+
+        MINI_CHECK!(half.point_count() == 5);
+        MINI_CHECK!(half.is_closed());
+        MINI_CHECK!(TOLERANCE.is_close(half.get_point(0).unwrap()[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(half.area(), 2.0));
+        MINI_CHECK!(all.point_count() == 5);
+        MINI_CHECK!(TOLERANCE.is_close(all.area(), 4.0));
+        MINI_CHECK!(none.point_count() == 0);
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Polyline",
+    "Clip By Plane",
+    crate::polyline_test::run_polyline_clip_by_plane
+);
+
+pub fn run_polyline_offset_toward() -> TestResult {
+    MINI_TEST!("Offset Toward", {
+        use crate::Point;
+        use crate::Polyline;
+        use crate::Vector;
+
+        let arch = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(5.0, 0.0, 5.0),
+            Point::new(10.0, 0.0, 0.0),
+        ]);
+        let offset = arch
+            .offset_toward(1.0, &Vector::new(0.0, 0.0, 1.0))
+            .unwrap();
+        let same = arch
+            .offset_toward(0.0, &Vector::new(0.0, 0.0, 1.0))
+            .unwrap();
+
+        MINI_CHECK!(offset.point_count() == 3);
+        MINI_CHECK!(TOLERANCE.is_close(offset.get_point(0).unwrap()[0], -0.5 * 2.0_f64.sqrt()));
+        MINI_CHECK!(TOLERANCE.is_close(offset.get_point(0).unwrap()[2], 0.5 * 2.0_f64.sqrt()));
+        MINI_CHECK!(TOLERANCE.is_close(offset.get_point(1).unwrap()[0], 5.0));
+        MINI_CHECK!(TOLERANCE.is_close(offset.get_point(1).unwrap()[2], 5.0 + 2.0_f64.sqrt()));
+        MINI_CHECK!(
+            TOLERANCE.is_close(offset.get_point(2).unwrap()[0], 10.0 + 0.5 * 2.0_f64.sqrt())
+        );
+        MINI_CHECK!(TOLERANCE.is_close(same.get_point(1).unwrap()[2], 5.0));
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Polyline",
+    "Offset Toward",
+    crate::polyline_test::run_polyline_offset_toward
+);
+
+pub fn run_polyline_extended() -> TestResult {
+    MINI_TEST!("Extended", {
+        use crate::Point;
+        use crate::Polyline;
+
+        let path = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+        ]);
+        let single = Polyline::new(vec![Point::new(1.0, 2.0, 3.0)]);
+        let longer = path.extended(2.0, 3.0);
+        let shorter = path.extended(-0.5, 0.0);
+
+        MINI_CHECK!(longer.point_count() == 3);
+        MINI_CHECK!(TOLERANCE.is_close(longer.get_point(0).unwrap()[0], -2.0));
+        MINI_CHECK!(TOLERANCE.is_close(longer.get_point(1).unwrap()[0], 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(longer.get_point(2).unwrap()[1], 4.0));
+        MINI_CHECK!(TOLERANCE.is_close(shorter.get_point(0).unwrap()[0], 0.5));
+        MINI_CHECK!(TOLERANCE.is_close(shorter.get_point(2).unwrap()[1], 1.0));
+        MINI_CHECK!(single.extended(2.0, 3.0).point_count() == 1);
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Polyline",
+    "Extended",
+    crate::polyline_test::run_polyline_extended
+);
+
+pub fn run_polyline_trimmed() -> TestResult {
+    MINI_TEST!("Trimmed", {
+        use crate::Plane;
+        use crate::Point;
+        use crate::Polyline;
+        use crate::Vector;
+
+        let path = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(10.0, 0.0, 0.0),
+            Point::new(20.0, 0.0, 0.0),
+        ]);
+        let plane0 =
+            Plane::from_point_normal(Point::new(5.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0), None);
+        let plane1 =
+            Plane::from_point_normal(Point::new(15.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0), None);
+        let beyond0 =
+            Plane::from_point_normal(Point::new(-5.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0), None);
+        let beyond1 =
+            Plane::from_point_normal(Point::new(25.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0), None);
+        let inside = path.trimmed(&plane0, &plane1, 100.0);
+        let outside = path.trimmed(&beyond0, &beyond1, 100.0);
+
+        MINI_CHECK!(inside.point_count() == 3);
+        MINI_CHECK!(TOLERANCE.is_close(inside.get_point(0).unwrap()[0], 5.0));
+        MINI_CHECK!(TOLERANCE.is_close(inside.get_point(2).unwrap()[0], 15.0));
+        MINI_CHECK!(outside.point_count() == 3);
+        MINI_CHECK!(TOLERANCE.is_close(outside.get_point(0).unwrap()[0], -5.0));
+        MINI_CHECK!(TOLERANCE.is_close(outside.get_point(2).unwrap()[0], 25.0));
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Polyline",
+    "Trimmed",
+    crate::polyline_test::run_polyline_trimmed
+);
+
+pub fn run_polyline_trimmed_alike() -> TestResult {
+    MINI_TEST!("Trimmed Alike", {
+        use crate::Plane;
+        use crate::Point;
+        use crate::Polyline;
+        use crate::Vector;
+
+        let a = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(10.0, 0.0, 0.0),
+            Point::new(20.0, 0.0, 0.0),
+        ]);
+        let b = Polyline::new(vec![
+            Point::new(0.0, 5.0, 0.0),
+            Point::new(10.0, 5.0, 0.0),
+            Point::new(20.0, 5.0, 0.0),
+        ]);
+        let c = Polyline::new(vec![Point::new(0.0, 9.0, 0.0), Point::new(20.0, 9.0, 0.0)]);
+        let plane0 =
+            Plane::from_point_normal(Point::new(5.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0), None);
+        let plane1 =
+            Plane::from_point_normal(Point::new(15.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0), None);
+        let missing = Plane::from_point_normal(
+            Point::new(500.0, 0.0, 0.0),
+            Vector::new(1.0, 0.0, 0.0),
+            None,
+        );
+        let trimmed =
+            Polyline::trimmed_alike(&[a.clone(), b.clone()], &plane1, &plane0, 100.0).unwrap();
+        let mixed = Polyline::trimmed_alike(&[a.clone(), c], &plane0, &plane1, 100.0).is_none();
+        let missed = Polyline::trimmed_alike(&[a, b], &plane0, &missing, 100.0).is_none();
+
+        MINI_CHECK!(trimmed.len() == 2);
+        MINI_CHECK!(trimmed[1].point_count() == 3);
+        MINI_CHECK!(TOLERANCE.is_close(trimmed[1].get_point(0).unwrap()[0], 5.0));
+        MINI_CHECK!(TOLERANCE.is_close(trimmed[1].get_point(0).unwrap()[1], 5.0));
+        MINI_CHECK!(TOLERANCE.is_close(trimmed[1].get_point(2).unwrap()[0], 15.0));
+        MINI_CHECK!(mixed);
+        MINI_CHECK!(missed);
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Polyline",
+    "Trimmed Alike",
+    crate::polyline_test::run_polyline_trimmed_alike
+);
+
+pub fn run_polyline_overlap() -> TestResult {
+    MINI_TEST!("Overlap", {
+        use crate::Plane;
+        use crate::Point;
+        use crate::Polyline;
+
+        let a = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(4.0, 0.0, 0.0),
+            Point::new(4.0, 4.0, 0.0),
+            Point::new(0.0, 4.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+        ]);
+        let b = Polyline::new(vec![
+            Point::new(2.0, -1.0, 0.0),
+            Point::new(6.0, -1.0, 0.0),
+            Point::new(6.0, 3.0, 0.0),
+            Point::new(2.0, 3.0, 0.0),
+            Point::new(2.0, -1.0, 0.0),
+        ]);
+        let apart = Polyline::new(vec![
+            Point::new(10.0, 10.0, 0.0),
+            Point::new(11.0, 10.0, 0.0),
+            Point::new(11.0, 11.0, 0.0),
+            Point::new(10.0, 11.0, 0.0),
+            Point::new(10.0, 10.0, 0.0),
+        ]);
+        let shared = a.overlap(&b, &Plane::xy_plane());
+        let none = a.overlap(&apart, &Plane::xy_plane());
+
+        MINI_CHECK!(shared.point_count() == 5);
+        MINI_CHECK!(shared.is_closed());
+        MINI_CHECK!(TOLERANCE.is_close(shared.area(), 6.0));
+        MINI_CHECK!(TOLERANCE.is_close(shared.get_point(0).unwrap()[0], 2.0));
+        MINI_CHECK!(TOLERANCE.is_close(shared.get_point(0).unwrap()[1], 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(shared.get_point(1).unwrap()[0], 4.0));
+        MINI_CHECK!(TOLERANCE.is_close(shared.get_point(1).unwrap()[1], 0.0));
+        MINI_CHECK!(none.point_count() == 5);
+        MINI_CHECK!(TOLERANCE.is_close(none.area(), 16.0));
+        MINI_CHECK!(TOLERANCE.is_close(none.get_point(0).unwrap()[0], 0.0));
+    })
+}
+
+REGISTER_MINI_TEST!(
+    "Polyline",
+    "Overlap",
+    crate::polyline_test::run_polyline_overlap
+);

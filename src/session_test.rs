@@ -4214,6 +4214,66 @@ pub fn run_session_merge_keeps_feature_guids() -> TestResult {
     })
 }
 
+pub fn run_session_add_group_parent() -> TestResult {
+    MINI_TEST!("Add Group Parent", {
+        use crate::Session;
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let floor = session.add_group("floor");
+        let quarter = session.add_group_with("quarter_0", Some(&floor));
+
+        MINI_CHECK!(Rc::ptr_eq(
+            &floor.borrow().parent().unwrap(),
+            &session.tree.root().unwrap()
+        ));
+        MINI_CHECK!(Rc::ptr_eq(&quarter.borrow().parent().unwrap(), &floor));
+        MINI_CHECK!(floor.borrow().children().len() == 1);
+    })
+}
+
+pub fn run_session_group_named() -> TestResult {
+    MINI_TEST!("Group Named", {
+        use crate::Session;
+        use std::rc::Rc;
+
+        let mut session = Session::default();
+        let floor = session.add_group("floor");
+        session.add_group_with("beds", Some(&floor));
+        let first = session.group_named("quarter_0", Some(&floor));
+        let second = session.group_named("quarter_0", Some(&floor));
+
+        MINI_CHECK!(Rc::ptr_eq(&first, &second));
+        MINI_CHECK!(floor.borrow().children().len() == 2);
+        MINI_CHECK!(floor.borrow().children()[1].borrow().name == "quarter_0");
+        MINI_CHECK!(Rc::ptr_eq(&session.group_named("floor", None), &floor));
+        MINI_CHECK!(Rc::ptr_eq(
+            &session.group_named("top", None).borrow().parent().unwrap(),
+            &session.tree.root().unwrap()
+        ));
+    })
+}
+
+pub fn run_session_set_node_color_descendants() -> TestResult {
+    MINI_TEST!("Set Node Color Descendants", {
+        use crate::Color;
+        use crate::Point;
+        use crate::Session;
+
+        let mut session = Session::default();
+        let floor = session.add_group("floor");
+        let quarter = session.add_group_with("quarter_0", Some(&floor));
+        let point = session.add_point(Point::new(1.0, 2.0, 3.0), Some(&quarter));
+        let painted = session.set_node_color_with(&floor, Some(Color::red()), true);
+        session.set_node_color(&floor, Some(Color::blue()));
+
+        MINI_CHECK!(painted);
+        MINI_CHECK!(floor.borrow().color == Some(Color::blue()));
+        MINI_CHECK!(quarter.borrow().color == Some(Color::red()));
+        MINI_CHECK!(point.borrow().color == Some(Color::red()));
+    })
+}
+
 REGISTER_MINI_TEST!(
     "Session",
     "Constructor",
@@ -4765,4 +4825,19 @@ REGISTER_MINI_TEST!(
     "Session",
     "Merge Keeps Feature Guids",
     crate::session_test::run_session_merge_keeps_feature_guids
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Add Group Parent",
+    crate::session_test::run_session_add_group_parent
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Group Named",
+    crate::session_test::run_session_group_named
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Set Node Color Descendants",
+    crate::session_test::run_session_set_node_color_descendants
 );
