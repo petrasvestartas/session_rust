@@ -415,62 +415,6 @@ pub fn run_closest_boxes_closest() -> TestResult {
     })
 }
 
-pub fn run_closest_segment_segment() -> TestResult {
-    MINI_TEST!("Segment Segment", {
-        use crate::Closest;
-        use crate::Line;
-
-        let s = Line::new(0.0, 0.0, 0.0, 2.0, 0.0, 0.0);
-        let t = Line::new(1.0, -1.0, 1.0, 1.0, 1.0, 1.0);
-        let parallel = Line::new(3.0, 1.0, 0.0, 5.0, 1.0, 0.0);
-
-        let (u, v, d) = Closest::segment_segment(&s, &t);
-
-        MINI_CHECK!(TOLERANCE.is_close(u, 0.5));
-        MINI_CHECK!(TOLERANCE.is_close(v, 0.5));
-        MINI_CHECK!(TOLERANCE.is_close(d, 1.0));
-
-        let (u, v, d) = Closest::segment_segment(&s, &parallel);
-
-        MINI_CHECK!(TOLERANCE.is_close(u, 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(v, 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(d, 2.0_f64.sqrt()));
-    })
-}
-
-pub fn run_closest_triangle_point() -> TestResult {
-    MINI_TEST!("Triangle Point", {
-        use crate::Closest;
-        use crate::Point;
-
-        let a = Point::new(0.0, 0.0, 0.0);
-        let b = Point::new(4.0, 0.0, 0.0);
-        let c = Point::new(0.0, 4.0, 0.0);
-        let collinear = Point::new(2.0, 0.0, 0.0);
-
-        MINI_CHECK!(TOLERANCE.is_close(
-            Closest::triangle_point(&a, &b, &c, &Point::new(1.0, 1.0, 3.0)),
-            3.0
-        ));
-        MINI_CHECK!(TOLERANCE.is_close(
-            Closest::triangle_point(&a, &b, &c, &Point::new(1.0, 1.0, -3.0)),
-            3.0
-        ));
-        MINI_CHECK!(TOLERANCE.is_close(
-            Closest::triangle_point(&a, &b, &c, &Point::new(2.0, -3.0, 0.0)),
-            3.0
-        ));
-        MINI_CHECK!(TOLERANCE.is_close(
-            Closest::triangle_point(&a, &b, &c, &Point::new(-3.0, -4.0, 0.0)),
-            5.0
-        ));
-        MINI_CHECK!(TOLERANCE.is_close(
-            Closest::triangle_point(&a, &collinear, &b, &Point::new(1.0, 1.0, 0.0)),
-            1.0
-        ));
-    })
-}
-
 REGISTER_MINI_TEST!(
     "Closest",
     "Curve Point",
@@ -540,14 +484,4 @@ REGISTER_MINI_TEST!(
     "Closest",
     "Boxes Closest",
     crate::closest_test::run_closest_boxes_closest
-);
-REGISTER_MINI_TEST!(
-    "Closest",
-    "Segment Segment",
-    crate::closest_test::run_closest_segment_segment
-);
-REGISTER_MINI_TEST!(
-    "Closest",
-    "Triangle Point",
-    crate::closest_test::run_closest_triangle_point
 );

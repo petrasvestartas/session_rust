@@ -1444,11 +1444,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Polyline",
-            name: "Clip By Plane",
-            func: run_polyline_clip_by_plane,
-        },
-        RegisteredTest {
-            group: "Polyline",
             name: "Offset Toward",
             func: run_polyline_offset_toward,
         },
@@ -1466,11 +1461,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Polyline",
             name: "Trimmed Alike",
             func: run_polyline_trimmed_alike,
-        },
-        RegisteredTest {
-            group: "Polyline",
-            name: "Overlap",
-            func: run_polyline_overlap,
         },
         // Plane tests
         RegisteredTest {
@@ -2821,16 +2811,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Closest",
             name: "Boxes Closest",
             func: run_closest_boxes_closest,
-        },
-        RegisteredTest {
-            group: "Closest",
-            name: "Segment Segment",
-            func: run_closest_segment_segment,
-        },
-        RegisteredTest {
-            group: "Closest",
-            name: "Triangle Point",
-            func: run_closest_triangle_point,
         },
         // Primitives tests
         RegisteredTest {

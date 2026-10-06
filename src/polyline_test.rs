@@ -1703,52 +1703,6 @@ REGISTER_MINI_TEST!(
     crate::polyline_test::run_polyline_area_centroid
 );
 
-pub fn run_polyline_clip_by_plane() -> TestResult {
-    MINI_TEST!("Clip By Plane", {
-        use crate::Plane;
-        use crate::Point;
-        use crate::Polyline;
-        use crate::Vector;
-
-        let square = Polyline::new(vec![
-            Point::new(0.0, 0.0, 0.0),
-            Point::new(2.0, 0.0, 0.0),
-            Point::new(2.0, 2.0, 0.0),
-            Point::new(0.0, 2.0, 0.0),
-            Point::new(0.0, 0.0, 0.0),
-        ]);
-        let half = square.clip_by_plane(&Plane::from_point_normal(
-            Point::new(1.0, 0.0, 0.0),
-            Vector::new(1.0, 0.0, 0.0),
-            None,
-        ));
-        let all = square.clip_by_plane(&Plane::from_point_normal(
-            Point::new(-1.0, 0.0, 0.0),
-            Vector::new(1.0, 0.0, 0.0),
-            None,
-        ));
-        let none = square.clip_by_plane(&Plane::from_point_normal(
-            Point::new(3.0, 0.0, 0.0),
-            Vector::new(1.0, 0.0, 0.0),
-            None,
-        ));
-
-        MINI_CHECK!(half.point_count() == 5);
-        MINI_CHECK!(half.is_closed());
-        MINI_CHECK!(TOLERANCE.is_close(half.get_point(0).unwrap()[0], 1.0));
-        MINI_CHECK!(TOLERANCE.is_close(half.area(), 2.0));
-        MINI_CHECK!(all.point_count() == 5);
-        MINI_CHECK!(TOLERANCE.is_close(all.area(), 4.0));
-        MINI_CHECK!(none.point_count() == 0);
-    })
-}
-
-REGISTER_MINI_TEST!(
-    "Polyline",
-    "Clip By Plane",
-    crate::polyline_test::run_polyline_clip_by_plane
-);
-
 pub fn run_polyline_offset_toward() -> TestResult {
     MINI_TEST!("Offset Toward", {
         use crate::Point;
@@ -1901,51 +1855,3 @@ REGISTER_MINI_TEST!(
     crate::polyline_test::run_polyline_trimmed_alike
 );
 
-pub fn run_polyline_overlap() -> TestResult {
-    MINI_TEST!("Overlap", {
-        use crate::Plane;
-        use crate::Point;
-        use crate::Polyline;
-
-        let a = Polyline::new(vec![
-            Point::new(0.0, 0.0, 0.0),
-            Point::new(4.0, 0.0, 0.0),
-            Point::new(4.0, 4.0, 0.0),
-            Point::new(0.0, 4.0, 0.0),
-            Point::new(0.0, 0.0, 0.0),
-        ]);
-        let b = Polyline::new(vec![
-            Point::new(2.0, -1.0, 0.0),
-            Point::new(6.0, -1.0, 0.0),
-            Point::new(6.0, 3.0, 0.0),
-            Point::new(2.0, 3.0, 0.0),
-            Point::new(2.0, -1.0, 0.0),
-        ]);
-        let apart = Polyline::new(vec![
-            Point::new(10.0, 10.0, 0.0),
-            Point::new(11.0, 10.0, 0.0),
-            Point::new(11.0, 11.0, 0.0),
-            Point::new(10.0, 11.0, 0.0),
-            Point::new(10.0, 10.0, 0.0),
-        ]);
-        let shared = a.overlap(&b, &Plane::xy_plane());
-        let none = a.overlap(&apart, &Plane::xy_plane());
-
-        MINI_CHECK!(shared.point_count() == 5);
-        MINI_CHECK!(shared.is_closed());
-        MINI_CHECK!(TOLERANCE.is_close(shared.area(), 6.0));
-        MINI_CHECK!(TOLERANCE.is_close(shared.get_point(0).unwrap()[0], 2.0));
-        MINI_CHECK!(TOLERANCE.is_close(shared.get_point(0).unwrap()[1], 0.0));
-        MINI_CHECK!(TOLERANCE.is_close(shared.get_point(1).unwrap()[0], 4.0));
-        MINI_CHECK!(TOLERANCE.is_close(shared.get_point(1).unwrap()[1], 0.0));
-        MINI_CHECK!(none.point_count() == 5);
-        MINI_CHECK!(TOLERANCE.is_close(none.area(), 16.0));
-        MINI_CHECK!(TOLERANCE.is_close(none.get_point(0).unwrap()[0], 0.0));
-    })
-}
-
-REGISTER_MINI_TEST!(
-    "Polyline",
-    "Overlap",
-    crate::polyline_test::run_polyline_overlap
-);

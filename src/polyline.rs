@@ -1134,34 +1134,6 @@ impl Polyline {
         cut
     }
 
-    /// Return the closed polygon clipped to the side plane's normal points to, empty when nothing is left.
-    pub fn clip_by_plane(&self, plane: &Plane) -> Self {
-        let points = self.open_points();
-        let n = points.len();
-        let mut result = Vec::new();
-
-        for i in 0..n {
-            let a = &points[i];
-            let b = &points[(i + 1) % n];
-            let da = plane.signed_distance(a);
-            let db = plane.signed_distance(b);
-
-            if da >= 0.0 {
-                result.push(a.clone());
-            }
-
-            if (da >= 0.0) != (db >= 0.0) {
-                result.push(a + &(&(b - a) * (da / (da - db))));
-            }
-        }
-
-        if result.is_empty() {
-            return Polyline::new(result);
-        }
-
-        Polyline::new(result).closed()
-    }
-
     /// Return the loop closed with side i moved right of its direction in xy by distances[i], outwards for a counter-clockwise loop; corners mitred, the larger distance where two sides are parallel; empty for fewer than three corners or distances than sides.
     pub fn offset_sides(&self, distances: &[f64]) -> Polyline {
         let mut points = self.get_points();
@@ -1290,33 +1262,6 @@ impl Polyline {
             .cut_by_plane(plane1, Some(plane1.signed_distance(&middle) >= 0.0))
     }
 
-    /// Return the polygon both closed polygons share on plane, in this winding from the corner nearest this first point, closed; this polygon when they share nothing or all of it.
-    pub fn overlap(&self, other: &Polyline, plane: &Plane) -> Polyline {
-        let lp = self.open_points();
-        let shared = Self::boolean_op(self, other, 0, Some(plane));
-
-        if shared.is_empty() || (shared[0].area() - self.area()).abs() <= 1e-6 * self.area() {
-            return self.closed();
-        }
-
-        let mut points = shared[0].open_points();
-
-        if Self::newell_normal(&points).dot(&Self::newell_normal(&lp)) < 0.0 {
-            points.reverse();
-        }
-
-        let mut nearest = 0;
-
-        for i in 1..points.len() {
-            if points[i].distance(&lp[0], None) < points[nearest].distance(&lp[0], None) {
-                nearest = i;
-            }
-        }
-
-        points.rotate_left(nearest);
-
-        Polyline::new(points).closed()
-    }
 }
 
 impl Default for Polyline {
