@@ -564,8 +564,19 @@ pub fn run_polyline_extend_segment_equally() -> TestResult {
         let first = pl.get_point(0).unwrap()[0];
         let second = pl.get_point(1).unwrap()[0];
 
+        let mut ring = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+            Point::new(0.0, 0.0, 0.0),
+        ]);
+        ring.extend_segment_equally(0, 0.5, 0.0);
+        ring.extend_segment_equally(2, 0.5, 0.0);
+
         MINI_CHECK!(TOLERANCE.is_close(first, -0.5));
         MINI_CHECK!(TOLERANCE.is_close(second, 1.5));
+        MINI_CHECK!(ring.is_closed());
+        MINI_CHECK!(ring.get_point(0) == ring.get_point(3));
     })
 }
 
