@@ -960,13 +960,14 @@ impl Polyline {
             return;
         }
 
+        let closed = self.point_count() > 2 && self.is_closed();
         let mut p0 = self.point(segment_id);
         let mut p1 = self.point(segment_id + 1);
         Self::extend_segment_equally_static(&mut p0, &mut p1, dist, proportion);
         self.set_point(segment_id, &p0);
         self.set_point(segment_id + 1, &p1);
 
-        if self.point_count() <= 2 || !self.is_closed() {
+        if !closed {
             return;
         }
 
