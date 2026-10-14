@@ -44,6 +44,10 @@ name = "pdf_import"
 path = "src/bin/pdf_import.rs"
 required-features = ["pdf"]
 
+[[example]]
+name = "session_robot_arm_rust"
+path = "../session_examples/robot_arm.rs"
+
 # On wasm, wgpu handles are !Send/!Sync. `Mesh` now caches a wgpu::Buffer and must
 # stay Send (rayon par_iter over Vec<Mesh>), so promise single-threaded-wasm safety.
 [target.'cfg(target_arch = "wasm32")'.dependencies]

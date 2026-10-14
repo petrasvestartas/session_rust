@@ -21,7 +21,7 @@ pub struct InstanceRef {
     guid: OnceLock<String>, // Lazily minted GUID.
     pub name: String,            // Instance name.
     pub definition_guid: String, // Guid of the referenced definition.
-    pub xform: Xform, // Placement outside a Session; inside one Session::xforms places the instance and this stays identity.
+    pub xform: Xform, // Outside-Session placement; inside one the central xforms table holds the LOCAL placement.
     pub color: Color, // Display color, used when flags has FLAG_COLOR.
     #[serde(default)]
     pub flags: u32, // FLAG_* bits.

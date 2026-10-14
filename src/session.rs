@@ -1124,7 +1124,7 @@ pub struct Session {
     #[serde(skip)]
     pub component_lookup: HashMap<String, Component>, // Fast lookup table for components by GUID.
     #[serde(skip)]
-    pub xforms: HashMap<String, Xform>, // LOCAL transform per guid, relative to the parent.
+    pub xforms: HashMap<String, Xform>, // Central table by tree-node name/object guid; values are LOCAL to the tree parent.
     #[serde(default)]
     pub definitions: Objects, // Shared geometry instances place, each in its own frame; never in order(), the tree, the graph or xforms.
     #[serde(skip)]
@@ -1367,7 +1367,7 @@ impl Session {
         order
     }
 
-    /// The LOCAL transform of an object, identity when none was set.
+    /// The LOCAL transform stored centrally under tree-node name/object guid, relative to its parent; identity if absent.
     pub fn xform(&self, guid: &str) -> Xform {
         self.xforms
             .get(guid)
@@ -1375,7 +1375,7 @@ impl Session {
             .unwrap_or_else(Xform::identity)
     }
 
-    /// The CUMULATIVE placement of an object: every ancestor's transform multiplied down the tree onto its own.
+    /// The WORLD transform: the product of LOCAL transforms from the tree root through the object.
     pub fn world_xform(&self, guid: &str) -> Xform {
         let mut acc = self.xform(guid);
         let Some(node) = self.get_node(guid) else {
@@ -1393,7 +1393,7 @@ impl Session {
         acc
     }
 
-    /// Every object's cumulative placement, computed in one downward pass.
+    /// Every object's WORLD transform, computed by multiplying LOCAL transforms down the tree.
     pub fn world_xforms(&self) -> HashMap<String, Xform> {
         let mut out: HashMap<String, Xform> = HashMap::new();
 
@@ -2252,7 +2252,7 @@ impl Session {
         true
     }
 
-    /// Set the LOCAL transform of an object, relative to its tree parent; a guid that names only a definition is ignored.
+    /// Set the central LOCAL transform under tree-node name/object guid, relative to its parent; a definition-only guid is ignored.
     pub fn set_xform(&mut self, guid: &str, xform: Xform) {
         if self.definition_lookup.contains_key(guid)
             && !self.lookup.contains_key(guid)

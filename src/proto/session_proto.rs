@@ -780,7 +780,7 @@ pub struct InstanceRef {
     /// Guid of the definition this instance places
     #[prost(string, tag = "3")]
     pub definition_guid: ::prost::alloc::string::String,
-    /// Unused inside a Session, where Session.xforms places the instance; identity is not written
+    /// Outside-Session placement; inside one the LOCAL placement is stored centrally in Session.xforms
     #[prost(message, optional, tag = "4")]
     pub xform: ::core::option::Option<Xform>,
     /// Per-instance color, written only when flags has FLAG_COLOR
@@ -1171,15 +1171,16 @@ pub struct Tree {
     #[prost(message, optional, tag = "3")]
     pub root: ::core::option::Option<TreeNode>,
 }
-/// One object's local placement. Transforms are stored ONLY here - geometry types
-/// carry no transformation member. A map is deliberately avoided: map iteration
-/// order is unspecified, and this repo requires byte-identical output across languages.
+/// One tree node/object's local placement. Transforms live in this central Session
+/// table, but every value is LOCAL to its tree parent; geometry types carry no
+/// transformation member. A map is deliberately avoided because map iteration order
+/// is unspecified, and this repo requires byte-identical output across languages.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct XformEntry {
     /// Guid of the object this transform places
     #[prost(string, tag = "1")]
     pub guid: ::prost::alloc::string::String,
-    /// LOCAL transform, relative to the tree parent
+    /// LOCAL transform relative to the tree parent, not a WORLD transform
     #[prost(message, optional, tag = "2")]
     pub xform: ::core::option::Option<Xform>,
 }
@@ -1214,7 +1215,7 @@ pub struct Session {
     /// Simplified BVH representation (AABBs)
     #[prost(message, repeated, tag = "6")]
     pub bvh_boxes: ::prost::alloc::vec::Vec<BoundingBox>,
-    /// Local transforms in Session::order() sequence, identity omitted
+    /// Central table of LOCAL transforms in Session::order() sequence, identity omitted
     #[prost(message, repeated, tag = "7")]
     pub xforms: ::prost::alloc::vec::Vec<XformEntry>,
     /// Shared geometry instances place, each in its own frame; absent when there is none
