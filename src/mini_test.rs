@@ -3562,6 +3562,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Session",
+            name: "Add Matrix",
+            func: run_session_add_matrix,
+        },
+        RegisteredTest {
+            group: "Session",
             name: "Component Json Roundtrip",
             func: run_session_component_json_roundtrip,
         },
@@ -5637,6 +5642,16 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Matrix",
             name: "Protobuf Roundtrip",
             func: run_matrix_protobuf_roundtrip,
+        },
+        RegisteredTest {
+            group: "Matrix",
+            name: "To Component",
+            func: run_matrix_to_component,
+        },
+        RegisteredTest {
+            group: "Matrix",
+            name: "From Component",
+            func: run_matrix_from_component,
         },
         RegisteredTest {
             group: "Matrix",

@@ -1204,6 +1204,26 @@ pub fn run_session_add_component() -> TestResult {
     })
 }
 
+pub fn run_session_add_matrix() -> TestResult {
+    MINI_TEST!("Add Matrix", {
+        use crate::Matrix;
+        use crate::Session;
+
+        let mut session = Session::default();
+        let mut m = Matrix::from_rows(&[vec![1.0, -2.0], vec![0.0, 3.0]]);
+        m.name = "stiffness".to_string();
+
+        session.add_matrix(&m, None);
+        let component = session.objects.components[0].clone();
+        let restored = Matrix::from_component(&component).unwrap();
+
+        MINI_CHECK!(session.objects.components.len() == 1);
+        MINI_CHECK!(component.type_name == "Matrix" && component.guid == m.guid());
+        MINI_CHECK!(session.graph.has_node(m.guid()));
+        MINI_CHECK!(restored == m && restored.guid() == m.guid());
+    })
+}
+
 pub fn run_session_component_json_roundtrip() -> TestResult {
     MINI_TEST!("Component Json Roundtrip", {
         use crate::file_encoders::file_json_dump;
@@ -4470,6 +4490,11 @@ REGISTER_MINI_TEST!(
     "Session",
     "Add Component",
     crate::session_test::run_session_add_component
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Add Matrix",
+    crate::session_test::run_session_add_matrix
 );
 REGISTER_MINI_TEST!(
     "Session",

@@ -25,6 +25,7 @@ use crate::Element;
 use crate::Graph;
 use crate::InstanceRef;
 use crate::Line;
+use crate::Matrix;
 use crate::Mesh;
 use crate::NurbsCurve;
 use crate::NurbsSurface;
@@ -1687,6 +1688,15 @@ impl Session {
             parent,
         )
         .unwrap_or_else(|guid| self._node_of(&guid))
+    }
+
+    /// Add a matrix as its component (type_name Matrix, the matrix's guid), placed by set_xform on that guid; a guid already live adds nothing and returns the node that guid has.
+    pub fn add_matrix(
+        &mut self,
+        matrix: &Matrix,
+        parent: Option<&Rc<RefCell<TreeNode>>>,
+    ) -> Rc<RefCell<TreeNode>> {
+        self.add_component(matrix.to_component(), parent)
     }
 
     /// Add a definition, geometry in its own frame that instances share; returns its guid, also when that guid is already defined, and "" for a guid an object, instance or component holds.

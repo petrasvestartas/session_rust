@@ -6,6 +6,7 @@ use crate::REGISTER_MINI_TEST;
 
 pub fn run_matrix_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
+        use crate::Color;
         use crate::Matrix;
 
         let m = Matrix::zeros(2, 3);
@@ -38,6 +39,11 @@ pub fn run_matrix_constructor() -> TestResult {
         MINI_CHECK!(srepr.contains("Matrix("));
         MINI_CHECK!(d == ml && d.guid() != ml.guid());
         MINI_CHECK!(short_repr.contains("guid='id...'"));
+        MINI_CHECK!(m.mincolor == Color::new(11.0 / 255.0, 25.0 / 255.0, 87.0 / 255.0, 1.0));
+        MINI_CHECK!(m.maxcolor == Color::new(206.0 / 255.0, 64.0 / 255.0, 149.0 / 255.0, 1.0));
+        MINI_CHECK!(m.zerocolor == Color::new(185.0 / 255.0, 185.0 / 255.0, 189.0 / 255.0, 1.0));
+        MINI_CHECK!(m.textcolor == Color::white() && m.linecolor == Color::black());
+        MINI_CHECK!(m.cell == 1.0);
     })
 }
 
@@ -325,10 +331,17 @@ pub fn run_matrix_rank() -> TestResult {
 
 pub fn run_matrix_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
+        use crate::Color;
         use crate::Matrix;
 
         let mut a = Matrix::from_vec(2, 3, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         a.name = "test_matrix".to_string();
+        a.mincolor = Color::blue();
+        a.maxcolor = Color::red();
+        a.zerocolor = Color::grey();
+        a.textcolor = Color::black();
+        a.linecolor = Color::white();
+        a.cell = 2.5;
         let filename = "serialization/test_matrix.json";
 
         a.file_json_dump(filename).unwrap();
@@ -340,18 +353,28 @@ pub fn run_matrix_json_roundtrip() -> TestResult {
         MINI_CHECK!(
             TOLERANCE.is_close(loaded[(0, 0)], 1.0) && TOLERANCE.is_close(loaded[(1, 2)], 6.0)
         );
+        MINI_CHECK!(loaded.mincolor == Color::blue() && loaded.maxcolor == Color::red());
+        MINI_CHECK!(loaded.zerocolor == Color::grey() && loaded.textcolor == Color::black());
+        MINI_CHECK!(loaded.linecolor == Color::white() && loaded.cell == 2.5);
         MINI_CHECK!(parsed == a);
     })
 }
 
 pub fn run_matrix_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
+        use crate::Color;
         use crate::Matrix;
 
         let fresh = Matrix::default();
         let fresh_proto = fresh.to_proto();
         let mut a = Matrix::from_vec(2, 3, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         a.name = "test_matrix_proto".to_string();
+        a.mincolor = Color::blue();
+        a.maxcolor = Color::red();
+        a.zerocolor = Color::grey();
+        a.textcolor = Color::black();
+        a.linecolor = Color::white();
+        a.cell = 2.5;
         let guid = a.guid().to_string();
         let filename = "serialization/test_matrix.bin";
 
@@ -370,6 +393,45 @@ pub fn run_matrix_protobuf_roundtrip() -> TestResult {
         MINI_CHECK!(parsed == a);
         MINI_CHECK!(converted == a);
         MINI_CHECK!(loaded.guid() == guid && parsed.guid() == guid && converted.guid() == guid);
+        MINI_CHECK!(loaded.mincolor == Color::blue() && loaded.maxcolor == Color::red());
+        MINI_CHECK!(loaded.zerocolor == Color::grey() && loaded.textcolor == Color::black());
+        MINI_CHECK!(loaded.linecolor == Color::white() && loaded.cell == 2.5);
+    })
+}
+
+pub fn run_matrix_to_component() -> TestResult {
+    MINI_TEST!("To Component", {
+        use crate::Matrix;
+
+        let mut m = Matrix::from_rows(&[vec![1.0, -2.0], vec![0.0, 3.0]]);
+        m.name = "stiffness".to_string();
+        let component = m.to_component();
+        let extra = &component.extra;
+
+        MINI_CHECK!(component.type_name == "Matrix");
+        MINI_CHECK!(component.guid == m.guid() && component.name == "stiffness");
+        MINI_CHECK!(extra.len() == 9);
+        MINI_CHECK!(extra.contains_key("cell") && extra.contains_key("zerocolor"));
+        MINI_CHECK!(!extra.contains_key("guid") && !extra.contains_key("name"));
+        MINI_CHECK!(!extra.contains_key("type"));
+        MINI_CHECK!(extra["data"] == serde_json::json!([1.0, -2.0, 0.0, 3.0]));
+    })
+}
+
+pub fn run_matrix_from_component() -> TestResult {
+    MINI_TEST!("From Component", {
+        use crate::Color;
+        use crate::Matrix;
+
+        let mut m = Matrix::from_rows(&[vec![1.0, -2.0], vec![0.0, 3.0]]);
+        m.name = "stiffness".to_string();
+        m.maxcolor = Color::red();
+        m.cell = 0.5;
+        let restored = Matrix::from_component(&m.to_component()).unwrap();
+
+        MINI_CHECK!(restored == m);
+        MINI_CHECK!(restored.guid() == m.guid() && restored.name == "stiffness");
+        MINI_CHECK!(restored.maxcolor == Color::red() && restored.cell == 0.5);
     })
 }
 
@@ -501,6 +563,16 @@ REGISTER_MINI_TEST!(
     "Matrix",
     "Protobuf Roundtrip",
     crate::matrix_test::run_matrix_protobuf_roundtrip
+);
+REGISTER_MINI_TEST!(
+    "Matrix",
+    "To Component",
+    crate::matrix_test::run_matrix_to_component
+);
+REGISTER_MINI_TEST!(
+    "Matrix",
+    "From Component",
+    crate::matrix_test::run_matrix_from_component
 );
 REGISTER_MINI_TEST!(
     "Matrix",

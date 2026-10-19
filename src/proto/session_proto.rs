@@ -876,6 +876,24 @@ pub struct Matrix {
     /// Row-major flat data, length = rows * cols
     #[prost(double, repeated, tag = "5")]
     pub data: ::prost::alloc::vec::Vec<f64>,
+    /// Cell colour at the smallest non-zero entry
+    #[prost(message, optional, tag = "6")]
+    pub mincolor: ::core::option::Option<Color>,
+    /// Cell colour at the largest non-zero entry
+    #[prost(message, optional, tag = "7")]
+    pub maxcolor: ::core::option::Option<Color>,
+    /// Cell colour of a zero entry
+    #[prost(message, optional, tag = "8")]
+    pub zerocolor: ::core::option::Option<Color>,
+    /// Colour of the values written in the cells
+    #[prost(message, optional, tag = "9")]
+    pub textcolor: ::core::option::Option<Color>,
+    /// Colour of the cell edges and the title
+    #[prost(message, optional, tag = "10")]
+    pub linecolor: ::core::option::Option<Color>,
+    /// Edge length of one square cell
+    #[prost(double, tag = "11")]
+    pub cell: f64,
 }
 /// NurbsSurfaceTrimmed message representing a NURBS surface with trim boundaries
 #[derive(Clone, PartialEq, ::prost::Message)]

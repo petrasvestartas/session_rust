@@ -1,3 +1,5 @@
+use crate::color::Color;
+use crate::objects::Component;
 use crate::tolerance::Tolerance;
 use serde::ser::SerializeMap;
 use serde::Deserialize;
@@ -38,6 +40,12 @@ pub struct Matrix {
     pub rows: usize,        // Row count.
     pub cols: usize,        // Column count.
     pub data: Vec<f64>,     // Row-major values.
+    pub mincolor: Color,    // Cell colour at the smallest non-zero entry.
+    pub maxcolor: Color,    // Cell colour at the largest non-zero entry.
+    pub zerocolor: Color,   // Cell colour of a zero entry.
+    pub textcolor: Color,   // Colour of the values written in the cells.
+    pub linecolor: Color,   // Colour of the cell edges and the title.
+    pub cell: f64,          // Edge length of one square cell.
 }
 
 impl Matrix {
@@ -54,6 +62,12 @@ impl Matrix {
             rows,
             cols,
             data: vec![0.0; size],
+            mincolor: Color::new(11.0 / 255.0, 25.0 / 255.0, 87.0 / 255.0, 1.0),
+            maxcolor: Color::new(206.0 / 255.0, 64.0 / 255.0, 149.0 / 255.0, 1.0),
+            zerocolor: Color::new(185.0 / 255.0, 185.0 / 255.0, 189.0 / 255.0, 1.0),
+            textcolor: Color::white(),
+            linecolor: Color::black(),
+            cell: 1.0,
         }
     }
 
@@ -132,6 +146,12 @@ impl Matrix {
     pub fn duplicate(&self) -> Self {
         let mut m = Self::from_vec(self.rows, self.cols, self.data.clone());
         m.name = self.name.clone();
+        m.mincolor = self.mincolor.duplicate();
+        m.maxcolor = self.maxcolor.duplicate();
+        m.zerocolor = self.zerocolor.duplicate();
+        m.textcolor = self.textcolor.duplicate();
+        m.linecolor = self.linecolor.duplicate();
+        m.cell = self.cell;
 
         m
     }
@@ -338,9 +358,23 @@ impl Mul<f64> for Matrix {
 }
 
 impl PartialEq for Matrix {
-    /// Compare dimensions and values within the matrix comparison tolerance.
+    /// Compare dimensions, values within the matrix comparison tolerance, colours and cell size.
     fn eq(&self, other: &Self) -> bool {
         if self.rows != other.rows || self.cols != other.cols {
+            return false;
+        }
+
+        if self.mincolor != other.mincolor
+            || self.maxcolor != other.maxcolor
+            || self.zerocolor != other.zerocolor
+        {
+            return false;
+        }
+
+        if self.textcolor != other.textcolor
+            || self.linecolor != other.linecolor
+            || self.cell != other.cell
+        {
             return false;
         }
 
@@ -915,6 +949,12 @@ impl Matrix {
             rows: self.rows as i32,
             cols: self.cols as i32,
             data: self.data.clone(),
+            mincolor: Some(self.mincolor.to_proto()),
+            maxcolor: Some(self.maxcolor.to_proto()),
+            zerocolor: Some(self.zerocolor.to_proto()),
+            textcolor: Some(self.textcolor.to_proto()),
+            linecolor: Some(self.linecolor.to_proto()),
+            cell: self.cell,
         }
     }
 
@@ -947,6 +987,30 @@ impl Matrix {
 
         m.name = proto.name;
 
+        if let Some(color) = proto.mincolor {
+            m.mincolor = Color::from_proto(color);
+        }
+
+        if let Some(color) = proto.maxcolor {
+            m.maxcolor = Color::from_proto(color);
+        }
+
+        if let Some(color) = proto.zerocolor {
+            m.zerocolor = Color::from_proto(color);
+        }
+
+        if let Some(color) = proto.textcolor {
+            m.textcolor = Color::from_proto(color);
+        }
+
+        if let Some(color) = proto.linecolor {
+            m.linecolor = Color::from_proto(color);
+        }
+
+        if proto.cell > 0.0 {
+            m.cell = proto.cell;
+        }
+
         Ok(m)
     }
 
@@ -974,6 +1038,40 @@ impl Matrix {
     /// Read protobuf bytes from a file.
     pub fn pb_load(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
         Self::pb_loads(&std::fs::read(filename)?)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Component
+    // ═══════════════════════════════════════════════════════════════════════════
+    /// Return a Session component of type Matrix with this guid and name, every other JSON field in extra.
+    pub fn to_component(&self) -> Component {
+        let mut extra: std::collections::HashMap<String, serde_json::Value> =
+            serde_json::from_value(serde_json::to_value(self).unwrap_or_default())
+                .unwrap_or_default();
+        extra.remove("guid");
+        extra.remove("name");
+        extra.remove("type");
+
+        Component {
+            guid: self.guid().to_string(),
+            type_name: "Matrix".to_string(),
+            name: self.name.clone(),
+            extra,
+        }
+    }
+
+    /// Construct from a component made by to_component, guid and name from the component.
+    pub fn from_component(component: &Component) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut data = serde_json::Map::new();
+
+        for (key, value) in &component.extra {
+            data.insert(key.clone(), value.clone());
+        }
+
+        data.insert("guid".to_string(), serde_json::json!(component.guid));
+        data.insert("name".to_string(), serde_json::json!(component.name));
+
+        Ok(serde_json::from_value(serde_json::Value::Object(data))?)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1031,13 +1129,19 @@ impl serde::Serialize for Matrix {
     where
         S: Serializer,
     {
-        let mut map = serializer.serialize_map(Some(6))?;
+        let mut map = serializer.serialize_map(Some(12))?;
+        map.serialize_entry("cell", &self.cell)?;
         map.serialize_entry("cols", &(self.cols as i64))?;
         map.serialize_entry("data", &self.data)?;
         map.serialize_entry("guid", self.guid())?;
+        map.serialize_entry("linecolor", &self.linecolor)?;
+        map.serialize_entry("maxcolor", &self.maxcolor)?;
+        map.serialize_entry("mincolor", &self.mincolor)?;
         map.serialize_entry("name", &self.name)?;
         map.serialize_entry("rows", &(self.rows as i64))?;
+        map.serialize_entry("textcolor", &self.textcolor)?;
         map.serialize_entry("type", "Matrix")?;
+        map.serialize_entry("zerocolor", &self.zerocolor)?;
         map.end()
     }
 }
@@ -1049,11 +1153,17 @@ impl<'de> Deserialize<'de> for Matrix {
     {
         #[derive(Deserialize)]
         struct MatrixData {
+            cell: Option<f64>,
             cols: usize,
             data: Vec<f64>,
             guid: String,
+            linecolor: Option<Color>,
+            maxcolor: Option<Color>,
+            mincolor: Option<Color>,
             name: String,
             rows: usize,
+            textcolor: Option<Color>,
+            zerocolor: Option<Color>,
         }
 
         let d = MatrixData::deserialize(deserializer)?;
@@ -1071,6 +1181,30 @@ impl<'de> Deserialize<'de> for Matrix {
         }
 
         m.name = d.name;
+
+        if let Some(color) = d.mincolor {
+            m.mincolor = color;
+        }
+
+        if let Some(color) = d.maxcolor {
+            m.maxcolor = color;
+        }
+
+        if let Some(color) = d.zerocolor {
+            m.zerocolor = color;
+        }
+
+        if let Some(color) = d.textcolor {
+            m.textcolor = color;
+        }
+
+        if let Some(color) = d.linecolor {
+            m.linecolor = color;
+        }
+
+        if let Some(cell) = d.cell {
+            m.cell = cell;
+        }
 
         Ok(m)
     }
