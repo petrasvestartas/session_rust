@@ -76,6 +76,38 @@ impl Matrix {
         Self::new(rows, cols)
     }
 
+    /// Construct a matrix from rows, like a two-dimensional NumPy array.
+    pub fn array(values: &[Vec<f64>]) -> Self {
+        Self::from_rows(values)
+    }
+
+    /// Construct a column vector.
+    pub fn column(values: &[f64]) -> Self {
+        Self::from_vec(values.len(), 1, values.to_vec())
+    }
+
+    /// Construct a constant matrix.
+    pub fn full(rows: usize, cols: usize, value: f64) -> Self {
+        let mut result = Self::new(rows, cols);
+        result.data.fill(value);
+        result
+    }
+
+    /// Construct a matrix of ones.
+    pub fn ones(rows: usize, cols: usize) -> Self {
+        Self::full(rows, cols, 1.0)
+    }
+
+    /// Construct an identity matrix.
+    pub fn eye(n: usize) -> Self {
+        Self::identity(n)
+    }
+
+    /// Return (rows, cols).
+    pub fn shape(&self) -> (usize, usize) {
+        (self.rows, self.cols)
+    }
+
     /// Construct an n x n identity matrix.
     pub fn identity(n: usize) -> Self {
         let mut m = Self::new(n, n);
@@ -140,6 +172,32 @@ impl Matrix {
         }
 
         m
+    }
+
+    /// Construct a square matrix with the given diagonal values.
+    pub fn diag(values: &[f64]) -> Self {
+        let mut result = Self::new(values.len(), values.len());
+        for (i, value) in values.iter().enumerate() {
+            result[(i, i)] = *value;
+        }
+        result
+    }
+
+    /// Copy a rectangular block; indices are zero-based and sizes are counts.
+    pub fn block(&self, row: usize, col: usize, rows: usize, cols: usize) -> Self {
+        assert!(
+            row <= self.rows
+                && col <= self.cols
+                && rows <= self.rows - row
+                && cols <= self.cols - col,
+            "Matrix block is out of bounds"
+        );
+        let mut result = Self::new(rows, cols);
+        for i in 0..rows {
+            let start = (row + i) * self.cols + col;
+            result.data[i * cols..(i + 1) * cols].copy_from_slice(&self.data[start..start + cols]);
+        }
+        result
     }
 
     /// Copy with a new guid and the same data.
@@ -301,26 +359,7 @@ impl Mul<&Matrix> for &Matrix {
 
     /// Multiply by a dimension-compatible matrix.
     fn mul(self, other: &Matrix) -> Matrix {
-        assert_eq!(
-            self.cols, other.rows,
-            "Matrix dimensions are incompatible for multiplication"
-        );
-
-        let mut result = Matrix::new(self.rows, other.cols);
-
-        for i in 0..self.rows {
-            for j in 0..other.cols {
-                let mut s = 0.0;
-
-                for k in 0..self.cols {
-                    s += self[(i, k)] * other[(k, j)];
-                }
-
-                result[(i, j)] = s;
-            }
-        }
-
-        result
+        self.matmul(other)
     }
 }
 
@@ -392,6 +431,82 @@ impl Matrix {
     // ═══════════════════════════════════════════════════════════════════════════
     // Linear algebra
     // ═══════════════════════════════════════════════════════════════════════════
+    /// Multiply by a dimension-compatible matrix, including column vectors.
+    pub fn matmul(&self, other: &Matrix) -> Matrix {
+        assert_eq!(
+            self.cols, other.rows,
+            "Matrix dimensions are incompatible for multiplication"
+        );
+        let mut result = Self::new(self.rows, other.cols);
+        for i in 0..self.rows {
+            for k in 0..self.cols {
+                let a = self[(i, k)];
+                for j in 0..other.cols {
+                    result[(i, j)] += a * other[(k, j)];
+                }
+            }
+        }
+        result
+    }
+
+    /// Multiply matching entries of equal-sized matrices.
+    pub fn hadamard(&self, other: &Matrix) -> Matrix {
+        assert!(
+            self.rows == other.rows && self.cols == other.cols,
+            "Matrix dimensions must match for entrywise multiplication"
+        );
+        let data = self
+            .data
+            .iter()
+            .zip(&other.data)
+            .map(|(a, b)| a * b)
+            .collect();
+        Self::from_vec(self.rows, self.cols, data)
+    }
+
+    /// Scale each row without constructing a diagonal matrix.
+    pub fn scale_rows(&self, values: &[f64]) -> Matrix {
+        assert_eq!(
+            values.len(),
+            self.rows,
+            "Matrix row scale count must match its rows"
+        );
+        let mut result = Self::new(self.rows, self.cols);
+        for i in 0..self.rows {
+            for j in 0..self.cols {
+                result[(i, j)] = self[(i, j)] * values[i];
+            }
+        }
+        result
+    }
+
+    /// Scale each column without constructing a diagonal matrix.
+    pub fn scale_cols(&self, values: &[f64]) -> Matrix {
+        assert_eq!(
+            values.len(),
+            self.cols,
+            "Matrix column scale count must match its columns"
+        );
+        let mut result = Self::new(self.rows, self.cols);
+        for i in 0..self.rows {
+            for j in 0..self.cols {
+                result[(i, j)] = self[(i, j)] * values[j];
+            }
+        }
+        result
+    }
+
+    /// Return the Euclidean norm of each row as a column vector.
+    pub fn row_norms(&self) -> Matrix {
+        let mut result = Self::new(self.rows, 1);
+        for i in 0..self.rows {
+            for j in 0..self.cols {
+                result[(i, 0)] = result[(i, 0)].hypot(self[(i, j)]);
+            }
+        }
+        result
+    }
+
     /// Return the transpose.
     pub fn transpose(&self) -> Matrix {
         let mut result = Self::new(self.cols, self.rows);
@@ -554,58 +669,116 @@ impl Matrix {
         Some(result)
     }
 
-    /// Return x with A * x = b, or None when no compatible unique solution exists.
+    /// Solve A * X = B for one or more columns using partial pivoting; None on invalid or singular input.
     pub fn solve(&self, b: &Matrix) -> Option<Matrix> {
-        if !self.is_square() || b.rows != self.rows || b.cols != 1 {
+        if !self.is_square() || b.rows != self.rows || b.cols == 0 {
             return None;
         }
-
-        let n = self.rows;
-        let (lower, u, p, _swaps) = self._lu_internal();
-
-        for i in 0..n {
-            if u[(i, i)].abs() < PIVOT_TOLERANCE {
+        if self.data.iter().chain(&b.data).any(|v| !v.is_finite()) {
+            return None;
+        }
+        let mut a = Self::from_vec(self.rows, self.cols, self.data.clone());
+        let mut x = Self::from_vec(b.rows, b.cols, b.data.clone());
+        for k in 0..self.rows {
+            let mut pivot = k;
+            for i in (k + 1)..self.rows {
+                if a[(i, k)].abs() > a[(pivot, k)].abs() {
+                    pivot = i;
+                }
+            }
+            if a[(pivot, k)] == 0.0 {
                 return None;
             }
-        }
-
-        let mut pb = vec![0.0; n];
-
-        for i in 0..n {
-            for j in 0..n {
-                pb[i] += p[(i, j)] * b[(j, 0)];
+            if pivot != k {
+                for j in 0..self.cols {
+                    a.data.swap(k * self.cols + j, pivot * self.cols + j);
+                }
+                for j in 0..b.cols {
+                    x.data.swap(k * b.cols + j, pivot * b.cols + j);
+                }
+            }
+            for i in (k + 1)..self.rows {
+                let factor = a[(i, k)] / a[(k, k)];
+                a[(i, k)] = 0.0;
+                for j in (k + 1)..self.cols {
+                    let value = a[(k, j)];
+                    a[(i, j)] -= factor * value;
+                }
+                for j in 0..b.cols {
+                    let value = x[(k, j)];
+                    x[(i, j)] -= factor * value;
+                }
             }
         }
+        if a.data.iter().any(|v| !v.is_finite()) {
+            return None;
+        }
+        for i in (0..self.rows).rev() {
+            for j in (i + 1)..self.rows {
+                for c in 0..b.cols {
+                    let value = x[(j, c)];
+                    x[(i, c)] -= a[(i, j)] * value;
+                }
+            }
+            for c in 0..b.cols {
+                x[(i, c)] /= a[(i, i)];
+            }
+        }
+        if x.data.iter().any(|v| !v.is_finite()) {
+            return None;
+        }
+        Some(x)
+    }
 
-        let mut y = vec![0.0; n];
-
-        for i in 0..n {
-            y[i] = pb[i];
-
+    /// Solve a symmetric positive-definite system by Cholesky; None on invalid input.
+    pub fn solve_positive_definite(&self, b: &Matrix) -> Option<Matrix> {
+        if !self.is_square() || b.rows != self.rows || b.cols == 0 {
+            return None;
+        }
+        if self.data.iter().chain(&b.data).any(|v| !v.is_finite()) {
+            return None;
+        }
+        let eps = 32.0 * f64::EPSILON;
+        for i in 0..self.rows {
             for j in 0..i {
-                y[i] -= lower[(i, j)] * y[j];
+                if (self[(i, j)] - self[(j, i)]).abs()
+                    > eps * self[(i, j)].abs().max(self[(j, i)].abs())
+                {
+                    return None;
+                }
             }
         }
-
-        let mut x = vec![0.0; n];
-
-        for i in (0..n).rev() {
-            x[i] = y[i];
-
-            for j in (i + 1)..n {
-                x[i] -= u[(i, j)] * x[j];
+        let lower = self.cholesky()?;
+        if lower.data.iter().any(|v| !v.is_finite()) {
+            return None;
+        }
+        let mut x = Self::from_vec(b.rows, b.cols, b.data.clone());
+        for i in 0..self.rows {
+            for j in 0..i {
+                for c in 0..b.cols {
+                    let value = x[(j, c)];
+                    x[(i, c)] -= lower[(i, j)] * value;
+                }
             }
-
-            x[i] /= u[(i, i)];
+            for c in 0..b.cols {
+                x[(i, c)] /= lower[(i, i)];
+            }
         }
-
-        let mut result = Self::new(n, 1);
-
-        for i in 0..n {
-            result[(i, 0)] = x[i];
+        for i in (0..self.rows).rev() {
+            for j in (i + 1)..self.rows {
+                for c in 0..b.cols {
+                    let value = x[(j, c)];
+                    x[(i, c)] -= lower[(j, i)] * value;
+                }
+            }
+            for c in 0..b.cols {
+                x[(i, c)] /= lower[(i, i)];
+            }
         }
-
-        Some(result)
+        if x.data.iter().any(|v| !v.is_finite()) {
+            return None;
+        }
+        Some(x)
     }
 
     /// Return (Q, R) from Gram-Schmidt decomposition.

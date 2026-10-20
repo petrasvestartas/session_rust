@@ -5663,6 +5663,41 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Shape Errors",
             func: run_matrix_shape_errors,
         },
+        RegisteredTest {
+            group: "Matrix",
+            name: "Tutorial Operations",
+            func: run_matrix_tutorial_operations,
+        },
+        RegisteredTest {
+            group: "Matrix",
+            name: "Solve Multiple",
+            func: run_matrix_solve_multiple,
+        },
+        RegisteredTest {
+            group: "Matrix",
+            name: "Solve Positive Definite",
+            func: run_matrix_solve_positive_definite,
+        },
+        RegisteredTest {
+            group: "Matrix",
+            name: "Solver Errors",
+            func: run_matrix_solver_errors,
+        },
+        RegisteredTest {
+            group: "Matrix",
+            name: "Force Density",
+            func: run_matrix_force_density,
+        },
+        RegisteredTest {
+            group: "Matrix",
+            name: "Array Constructors",
+            func: run_matrix_array_constructors,
+        },
+        RegisteredTest {
+            group: "Matrix",
+            name: "Operation Errors",
+            func: run_matrix_operation_errors,
+        },
         // SpatialKDTree tests
         RegisteredTest {
             group: "SpatialKDTree",

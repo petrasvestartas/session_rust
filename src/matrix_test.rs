@@ -584,3 +584,221 @@ REGISTER_MINI_TEST!(
     "Shape Errors",
     crate::matrix_test::run_matrix_shape_errors
 );
+
+pub fn run_matrix_tutorial_operations() -> TestResult {
+    MINI_TEST!("Tutorial Operations", {
+        use crate::Matrix;
+
+        let a = Matrix::from_rows(&[vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]]);
+        let diagonal = Matrix::diag(&[2.0, 3.0]);
+        MINI_CHECK!(diagonal == Matrix::from_rows(&[vec![2.0, 0.0], vec![0.0, 3.0]]));
+        MINI_CHECK!(a.block(0, 1, 2, 2) == Matrix::from_rows(&[vec![2.0, 3.0], vec![5.0, 6.0]]));
+        MINI_CHECK!(a.block(2, 3, 0, 0).data.is_empty());
+        MINI_CHECK!(a.scale_rows(&[2.0, 3.0]) == diagonal.matmul(&a));
+        MINI_CHECK!(a.scale_cols(&[2.0, 3.0, 4.0]) == a.matmul(&Matrix::diag(&[2.0, 3.0, 4.0])));
+        MINI_CHECK!(
+            a.hadamard(&a) == Matrix::from_rows(&[vec![1.0, 4.0, 9.0], vec![16.0, 25.0, 36.0]])
+        );
+        MINI_CHECK!(
+            Matrix::from_rows(&[vec![3.0, 4.0], vec![0.0, 0.0]]).row_norms()
+                == Matrix::from_cols(&[vec![5.0, 0.0]])
+        );
+        MINI_CHECK!(Matrix::zeros(2, 0).row_norms() == Matrix::zeros(2, 1));
+        MINI_CHECK!(
+            a.matmul(&Matrix::from_cols(&[vec![1.0, 0.0, -1.0]]))
+                == Matrix::from_cols(&[vec![-2.0, -2.0]])
+        );
+        MINI_CHECK!(a == a.transpose().transpose());
+        MINI_CHECK!(Matrix::diag(&[]).rows == 0);
+    })
+}
+REGISTER_MINI_TEST!(
+    "Matrix",
+    "Tutorial Operations",
+    crate::matrix_test::run_matrix_tutorial_operations
+);
+
+pub fn run_matrix_solve_multiple() -> TestResult {
+    MINI_TEST!("Solve Multiple", {
+        use crate::Matrix;
+
+        let a = Matrix::from_rows(&[vec![0.0, 2.0], vec![1.0, 3.0]]);
+        let b = Matrix::from_rows(&[vec![8.0, 10.0, 12.0], vec![13.0, 17.0, 21.0]]);
+        let expected = Matrix::from_rows(&[vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]]);
+        let x = a.solve(&b);
+        MINI_CHECK!(x.is_some());
+        MINI_CHECK!((x.as_ref().unwrap().clone() - expected.clone()).norm_inf() < 1e-12);
+        MINI_CHECK!((a.matmul(x.as_ref().unwrap()) - b.clone()).norm_inf() < 1e-12);
+        let small = (Matrix::identity(2) * 1e-200).solve(&(&expected * 1e-200));
+        MINI_CHECK!(small.is_some());
+        MINI_CHECK!((small.as_ref().unwrap().clone() - expected.clone()).norm_inf() < 1e-12);
+        MINI_CHECK!(
+            Matrix::zeros(0, 0)
+                .solve(&Matrix::zeros(0, 3))
+                .unwrap()
+                .cols
+                == 3
+        );
+    })
+}
+REGISTER_MINI_TEST!(
+    "Matrix",
+    "Solve Multiple",
+    crate::matrix_test::run_matrix_solve_multiple
+);
+
+pub fn run_matrix_solve_positive_definite() -> TestResult {
+    MINI_TEST!("Solve Positive Definite", {
+        use crate::Matrix;
+
+        let a = Matrix::from_rows(&[vec![4.0, 1.0], vec![1.0, 3.0]]);
+        let b = Matrix::from_rows(&[vec![8.0, 13.0, 18.0], vec![13.0, 17.0, 21.0]]);
+        let expected = Matrix::from_rows(&[vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]]);
+        let x = a.solve_positive_definite(&b);
+        MINI_CHECK!(x.is_some());
+        MINI_CHECK!((x.as_ref().unwrap().clone() - expected.clone()).norm_inf() < 1e-12);
+        MINI_CHECK!((a.matmul(x.as_ref().unwrap()) - b.clone()).norm_inf() < 1e-12);
+        let small = (Matrix::identity(2) * 1e-200).solve_positive_definite(&(&expected * 1e-200));
+        MINI_CHECK!(small.is_some());
+        MINI_CHECK!((small.as_ref().unwrap().clone() - expected.clone()).norm_inf() < 1e-12);
+        MINI_CHECK!(
+            Matrix::zeros(0, 0)
+                .solve_positive_definite(&Matrix::zeros(0, 3))
+                .unwrap()
+                .cols
+                == 3
+        );
+    })
+}
+REGISTER_MINI_TEST!(
+    "Matrix",
+    "Solve Positive Definite",
+    crate::matrix_test::run_matrix_solve_positive_definite
+);
+
+pub fn run_matrix_solver_errors() -> TestResult {
+    MINI_TEST!("Solver Errors", {
+        use crate::Matrix;
+
+        let rhs = Matrix::identity(2);
+        let singular = Matrix::from_rows(&[vec![1.0, 2.0], vec![2.0, 4.0]]);
+        let indefinite = Matrix::from_rows(&[vec![1.0, 2.0], vec![2.0, 1.0]]);
+        let asymmetric = Matrix::from_rows(&[vec![4.0, 1.0], vec![0.0, 3.0]]);
+        MINI_CHECK!(!singular.solve(&rhs).is_some());
+        MINI_CHECK!(!singular.solve_positive_definite(&rhs).is_some());
+        MINI_CHECK!(!indefinite.solve_positive_definite(&rhs).is_some());
+        MINI_CHECK!(!asymmetric.solve_positive_definite(&rhs).is_some());
+        MINI_CHECK!(!Matrix::zeros(2, 3).solve(&rhs).is_some());
+        MINI_CHECK!(!rhs.solve(&Matrix::zeros(3, 1)).is_some());
+        MINI_CHECK!(!rhs.solve(&Matrix::zeros(2, 0)).is_some());
+        MINI_CHECK!(!rhs.solve_positive_definite(&Matrix::zeros(3, 1)).is_some());
+        MINI_CHECK!(!rhs.solve_positive_definite(&Matrix::zeros(2, 0)).is_some());
+        let bad = Matrix::from_rows(&[vec![f64::NAN, 0.0], vec![0.0, 1.0]]);
+        MINI_CHECK!(!bad.solve(&rhs).is_some());
+        MINI_CHECK!(!rhs.solve(&bad).is_some());
+        MINI_CHECK!(!bad.solve_positive_definite(&rhs).is_some());
+        MINI_CHECK!(!rhs.solve_positive_definite(&bad).is_some());
+    })
+}
+REGISTER_MINI_TEST!(
+    "Matrix",
+    "Solver Errors",
+    crate::matrix_test::run_matrix_solver_errors
+);
+
+pub fn run_matrix_force_density() -> TestResult {
+    MINI_TEST!("Force Density", {
+        use crate::Matrix;
+
+        let c_s = Matrix::from_rows(&[
+            vec![1.0, -1.0, 0.0, 0.0, 0.0],
+            vec![1.0, 0.0, -1.0, 0.0, 0.0],
+            vec![1.0, 0.0, 0.0, -1.0, 0.0],
+            vec![1.0, 0.0, 0.0, 0.0, -1.0],
+        ]);
+        let c = c_s.block(0, 0, 4, 1);
+        let cf = c_s.block(0, 1, 4, 4);
+        let fixed = Matrix::from_rows(&[
+            vec![-1.0, -1.0, 0.0],
+            vec![1.0, -1.0, 0.0],
+            vec![1.0, 1.0, 0.0],
+            vec![-1.0, 1.0, 0.0],
+        ]);
+        let loads = Matrix::from_rows(&[vec![0.0, 0.0, -1.0]]);
+        let d = c.transpose().matmul(&c.scale_rows(&[1.0, 1.0, 1.0, 1.0]));
+        let df = c.transpose().matmul(&cf.scale_rows(&[1.0, 1.0, 1.0, 1.0]));
+        let rhs = &loads - &df.matmul(&fixed);
+        let xyz = d.solve_positive_definite(&rhs);
+        MINI_CHECK!(xyz.is_some());
+        MINI_CHECK!(
+            (xyz.as_ref().unwrap().clone() - Matrix::from_rows(&[vec![0.0, 0.0, -0.25]]))
+                .norm_inf()
+                < 1e-12
+        );
+        MINI_CHECK!((d.solve(&rhs).unwrap() - xyz.as_ref().unwrap().clone()).norm_inf() < 1e-12);
+        let uvw = c.matmul(xyz.as_ref().unwrap()) + cf.matmul(&fixed);
+        let lengths = uvw.row_norms();
+        MINI_CHECK!((lengths[(0, 0)] - 2.0625_f64.sqrt()).abs() < 1e-12);
+        MINI_CHECK!((c.transpose().matmul(&uvw) - loads.clone()).norm_inf() < 1e-12);
+        let reactions = cf.transpose().matmul(&uvw);
+        MINI_CHECK!(
+            (reactions[(0, 2)] + reactions[(1, 2)] + reactions[(2, 2)] + reactions[(3, 2)] - 1.0)
+                .abs()
+                < 1e-12
+        );
+    })
+}
+REGISTER_MINI_TEST!(
+    "Matrix",
+    "Force Density",
+    crate::matrix_test::run_matrix_force_density
+);
+
+pub fn run_matrix_array_constructors() -> TestResult {
+    MINI_TEST!("Array Constructors", {
+        use crate::Matrix;
+
+        let a = Matrix::array(&[vec![1.0, 2.0], vec![3.0, 4.0]]);
+        MINI_CHECK!(a == Matrix::from_rows(&[vec![1.0, 2.0], vec![3.0, 4.0]]));
+        MINI_CHECK!(Matrix::column(&[2.0, 3.0]) == Matrix::from_cols(&[vec![2.0, 3.0]]));
+        MINI_CHECK!(Matrix::ones(2, 3) == Matrix::full(2, 3, 1.0));
+        MINI_CHECK!(Matrix::full(2, 2, -2.0).data == vec![-2.0, -2.0, -2.0, -2.0]);
+        MINI_CHECK!(Matrix::eye(3) == Matrix::identity(3));
+        MINI_CHECK!(a.shape() == (2, 2));
+        MINI_CHECK!(Matrix::column(&[]).rows == 0 && Matrix::column(&[]).cols == 1);
+        MINI_CHECK!(Matrix::full(0, 3, 2.0).data.is_empty());
+    })
+}
+REGISTER_MINI_TEST!(
+    "Matrix",
+    "Array Constructors",
+    crate::matrix_test::run_matrix_array_constructors
+);
+
+pub fn run_matrix_operation_errors() -> TestResult {
+    MINI_TEST!("Operation Errors", {
+        #[cfg(panic = "unwind")]
+        {
+            use crate::Matrix;
+            let a = Matrix::ones(2, 3);
+            let invalid: Vec<Box<dyn Fn() -> Matrix + '_>> = vec![
+                Box::new(|| a.block(3, 0, 0, 0)),
+                Box::new(|| a.block(1, 1, 2, 2)),
+                Box::new(|| a.scale_rows(&[1.0])),
+                Box::new(|| a.scale_cols(&[1.0])),
+                Box::new(|| a.hadamard(&Matrix::eye(2))),
+                Box::new(|| a.matmul(&Matrix::eye(2))),
+            ];
+            for operation in invalid {
+                let rejected =
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(operation)).is_err();
+                MINI_CHECK!(rejected);
+            }
+        }
+    })
+}
+REGISTER_MINI_TEST!(
+    "Matrix",
+    "Operation Errors",
+    crate::matrix_test::run_matrix_operation_errors
+);

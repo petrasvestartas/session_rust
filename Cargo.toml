@@ -51,6 +51,7 @@ path = "../session_examples/robot_arm.rs"
 # On wasm, wgpu handles are !Send/!Sync. `Mesh` now caches a wgpu::Buffer and must
 # stay Send (rayon par_iter over Vec<Mesh>), so promise single-threaded-wasm safety.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2", features = ["js"] }
 wgpu = { version = "29", features = ["fragile-send-sync-non-atomic-wasm"] }
 
 [build-dependencies]
