@@ -102,6 +102,99 @@ fn build_quad_face(b: &mut crate::BRep) -> usize {
     )
 }
 
+/// Quarter arc of the given radius in the xz plane at y, from (r, y, 0) to (0, y, r)
+fn quarter_arc(radius: f64, y: f64) -> crate::NurbsCurve {
+    use crate::Point;
+    use crate::Primitives;
+
+    let c = radius * 0.5f64.sqrt();
+
+    Primitives::arc(&Point::new(radius, y, 0.0), &Point::new(c, y, c), &Point::new(0.0, y, radius))
+}
+
+/// Closed solid of six ruled patches between four quarter arcs of radii ro and ri at y = 0 and y = width
+fn build_ring_sector(ro: f64, ri: f64, width: f64) -> crate::BRep {
+    use crate::brep::BRepOrientation;
+    use crate::brep::BRepRef;
+    use crate::BRep;
+    use crate::NurbsCurve;
+    use crate::Point;
+    use crate::Primitives;
+    use std::collections::HashMap;
+
+    let mut b = BRep::new();
+    let arcs = [quarter_arc(ro, 0.0), quarter_arc(ro, width), quarter_arc(ri, 0.0), quarter_arc(ri, width)];
+    let mut edges: HashMap<(i32, i32), usize> = HashMap::new();
+
+    for k in 0..4i32 {
+        let arc = &arcs[k as usize];
+        b.add_vertex(&arc.point_at(arc.domain_start()), 0.0);
+        b.add_vertex(&arc.point_at(arc.domain_end()), 0.0);
+        let ci = b.add_curve_3d(arc);
+        edges.insert((2 * k, 2 * k + 1), b.add_edge(ci as i32, 2 * k, 2 * k + 1));
+    }
+
+    let rulings = [(0, 2), (4, 6), (0, 4), (2, 6)];
+
+    for end in 0..2i32 {
+        for ruling in &rulings {
+            let start = ruling.0 + end;
+            let stop = ruling.1 + end;
+            let ends = [b.m_vertices[start as usize].point.clone(), b.m_vertices[stop as usize].point.clone()];
+            let ci = b.add_curve_3d(&NurbsCurve::create(false, 1, &ends));
+            edges.insert((start, stop), b.add_edge(ci as i32, start, stop));
+        }
+    }
+
+    let patches = [
+        Primitives::create_ruled(&arcs[0], &arcs[1]),
+        Primitives::create_ruled(&arcs[2], &arcs[3]),
+        Primitives::create_ruled(&arcs[0], &arcs[2]),
+        Primitives::create_ruled(&arcs[1], &arcs[3]),
+        Primitives::create_ruled(&b.m_curves_3d[edges[&(0, 2)]], &b.m_curves_3d[edges[&(4, 6)]]),
+        Primitives::create_ruled(&b.m_curves_3d[edges[&(1, 3)]], &b.m_curves_3d[edges[&(5, 7)]]),
+    ];
+    let corners = [[0, 1, 3, 2], [4, 5, 7, 6], [0, 1, 5, 4], [2, 3, 7, 6], [0, 2, 6, 4], [1, 3, 7, 5]];
+    let uv = [
+        Point::new(0.0, 0.0, 0.0),
+        Point::new(1.0, 0.0, 0.0),
+        Point::new(1.0, 1.0, 0.0),
+        Point::new(0.0, 1.0, 0.0),
+    ];
+    let mut shell = Vec::new();
+
+    for i in 0..6usize {
+        let si = b.add_surface(&patches[i]);
+        let mut wire = Vec::new();
+
+        for k in 0..4usize {
+            let next = (k + 1) % 4;
+            let a = corners[i][k].min(corners[i][next]);
+            let z = corners[i][k].max(corners[i][next]);
+            let edge = edges[&(a, z)];
+            let forward = b.m_edges[edge].start_vertex == corners[i][k];
+            let pcurve = if forward { [uv[k].clone(), uv[next].clone()] } else { [uv[next].clone(), uv[k].clone()] };
+            let c2 = b.add_curve_2d(&NurbsCurve::create(false, 1, &pcurve));
+            b.add_pcurve(edge, si, c2 as i32, -1);
+            let orientation = if forward { BRepOrientation::Forward } else { BRepOrientation::Reversed };
+            wire.push(BRepRef::new(edge as i32, orientation));
+        }
+
+        let wi = b.add_wire(&wire);
+        let fi = b.add_face(si as i32, &[BRepRef::new(wi as i32, BRepOrientation::Forward)], 0.0);
+        let centre = patches[i].point_at(0.5, 0.5).unwrap_or_default();
+        let away = centre - patches[i ^ 1].point_at(0.5, 0.5).unwrap_or_default();
+        let outward = patches[i].normal_at(0.5, 0.5).dot(&away) > 0.0;
+        let orientation = if outward { BRepOrientation::Forward } else { BRepOrientation::Reversed };
+        shell.push(BRepRef::new(fi as i32, orientation));
+    }
+
+    let shi = b.add_shell(&shell);
+    b.add_solid(&[BRepRef::new(shi as i32, BRepOrientation::Forward)]);
+
+    b
+}
+
 pub fn run_brep_shared_grid_boundary() -> TestResult {
     MINI_TEST!("Shared Grid Boundary", {
         use crate::brep::BRepOrientation;
@@ -1311,6 +1404,20 @@ pub fn run_brep_volume_far_from_origin() -> TestResult {
     })
 }
 
+pub fn run_brep_volume_planar_curved_boundary() -> TestResult {
+    MINI_TEST!("Volume Planar Curved Boundary", {
+        let sector = build_ring_sector(2000.0, 1880.0, 600.0);
+        let fm = sector.face_meshes();
+        let m = sector.mesh();
+        let r = PI / 4.0 * (2000.0 * 2000.0 - 1880.0 * 1880.0) * 600.0;
+
+        MINI_CHECK!(sector.is_solid() && fm.len() == 6);
+        MINI_CHECK!(fm[2].face.len() > 2 && fm[3].face.len() > 2);
+        MINI_CHECK!(m.is_closed());
+        MINI_CHECK!((sector.volume() - r).abs() / r < 0.01);
+    })
+}
+
 pub fn run_brep_face_polylines_box() -> TestResult {
     MINI_TEST!("Face Polylines Box", {
         use crate::BRep;
@@ -1683,6 +1790,11 @@ REGISTER_MINI_TEST!(
     "BRep",
     "Volume Far From Origin",
     crate::brep_test::run_brep_volume_far_from_origin
+);
+REGISTER_MINI_TEST!(
+    "BRep",
+    "Volume Planar Curved Boundary",
+    crate::brep_test::run_brep_volume_planar_curved_boundary
 );
 REGISTER_MINI_TEST!(
     "BRep",

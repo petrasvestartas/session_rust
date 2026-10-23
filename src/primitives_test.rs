@@ -134,10 +134,15 @@ pub fn run_primitives_nurbscurve_arc() -> TestResult {
         let mid = Point::new(1.0, 1.0, 0.0);
         let end = Point::new(2.0, 0.0, 0.0);
         let curve = Primitives::arc(&start, &mid, &end);
+        let quarter_mid = Point::new(0.5f64.sqrt(), 0.5f64.sqrt(), 0.0);
+        let quarter = Primitives::arc(&Point::new(1.0, 0.0, 0.0), &quarter_mid, &Point::new(0.0, 1.0, 0.0));
 
         MINI_CHECK!(curve.cv_count() == 3);
         MINI_CHECK!(curve.order() == 3);
         MINI_CHECK!(curve.is_rational());
+        MINI_CHECK!(TOLERANCE.is_point_close(&curve.point_at(0.5), &mid));
+        MINI_CHECK!(TOLERANCE.is_point_close(&quarter.point_at(0.5), &quarter_mid));
+        MINI_CHECK!((quarter.point_at(0.25).distance(&Point::new(0.0, 0.0, 0.0), None) - 1.0).abs() < 1e-9);
     })
 }
 

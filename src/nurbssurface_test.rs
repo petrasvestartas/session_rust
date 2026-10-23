@@ -1367,6 +1367,28 @@ pub fn run_nurbssurface_meshing() -> TestResult {
     })
 }
 
+pub fn run_nurbssurface_mesh_planar_curved_boundary() -> TestResult {
+    MINI_TEST!("Mesh Planar Curved Boundary", {
+        use crate::tolerance::Tolerance;
+        use crate::tolerance::PI;
+        use crate::Point;
+        use crate::Primitives;
+
+        let c = 0.5f64.sqrt();
+        let outer_mid = Point::new(2.0 * c, 0.0, 2.0 * c);
+        let outer = Primitives::arc(&Point::new(2.0, 0.0, 0.0), &outer_mid, &Point::new(0.0, 0.0, 2.0));
+        let inner = Primitives::arc(&Point::new(1.0, 0.0, 0.0), &Point::new(c, 0.0, c), &Point::new(0.0, 0.0, 1.0));
+        let side = Primitives::create_ruled(&outer, &inner);
+        let mesh = side.mesh();
+        let r = PI / 4.0 * (2.0 * 2.0 - 1.0 * 1.0);
+
+        MINI_CHECK!(side.is_planar(None, Tolerance::ZERO_TOLERANCE));
+        MINI_CHECK!(mesh.vertex.len() > 4);
+        MINI_CHECK!(mesh.vertex.values().next().unwrap().attributes.contains_key("u"));
+        MINI_CHECK!((mesh.area() - r).abs() / r < 0.01);
+    })
+}
+
 pub fn run_nurbssurface_split_by_plane() -> TestResult {
     MINI_TEST!("Split By Plane", {
         use crate::Plane;
@@ -1705,6 +1727,11 @@ REGISTER_MINI_TEST!(
     "NurbsSurface",
     "Meshing",
     crate::nurbssurface_test::run_nurbssurface_meshing
+);
+REGISTER_MINI_TEST!(
+    "NurbsSurface",
+    "Mesh Planar Curved Boundary",
+    crate::nurbssurface_test::run_nurbssurface_mesh_planar_curved_boundary
 );
 REGISTER_MINI_TEST!(
     "NurbsSurface",

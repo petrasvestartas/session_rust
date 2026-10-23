@@ -582,6 +582,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "BRep",
+            name: "Volume Planar Curved Boundary",
+            func: run_brep_volume_planar_curved_boundary,
+        },
+        RegisteredTest {
+            group: "BRep",
             name: "Face Polylines Box",
             func: run_brep_face_polylines_box,
         },
@@ -2477,6 +2482,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "NurbsSurface",
             name: "Meshing",
             func: run_nurbssurface_meshing,
+        },
+        RegisteredTest {
+            group: "NurbsSurface",
+            name: "Mesh Planar Curved Boundary",
+            func: run_nurbssurface_mesh_planar_curved_boundary,
         },
         RegisteredTest {
             group: "NurbsSurface",

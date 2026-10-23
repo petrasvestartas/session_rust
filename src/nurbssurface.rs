@@ -1910,7 +1910,7 @@ impl NurbsSurface {
         mesher.mesh()
     }
 
-    /// Return m_mesh when cached, else two triangles for a planar surface or the span grid.
+    /// Return m_mesh when cached, else two triangles for a planar bilinear patch or the span grid, vertices tagged u and v.
     pub fn mesh(&self) -> Mesh {
         if let Some(m) = &self.m_mesh {
             return m.clone();
@@ -1920,7 +1920,9 @@ impl NurbsSurface {
             return Mesh::new();
         }
 
-        if self.is_planar(None, 1e-6) {
+        let bilinear = self.degree(0) == 1 && self.degree(1) == 1 && self.cv_count(0) == 2 && self.cv_count(1) == 2;
+
+        if bilinear && self.is_planar(None, 1e-6) {
             return self.mesh_planar();
         }
 
@@ -2344,29 +2346,34 @@ impl NurbsSurface {
         ))
     }
 
-    /// Return two triangles through the four corners with one shared normal.
+    /// Return two triangles through the corners tagged u and v, one when the u = 0 side is a point, one shared normal.
     fn mesh_planar(&self) -> Mesh {
         let mut result = Mesh::new();
+        let du = self.domain(0).unwrap_or((0.0, 1.0));
+        let dv = self.domain(1).unwrap_or((0.0, 1.0));
+        let us = [du.0, du.1, du.1, du.0];
+        let vs = [dv.0, dv.0, dv.1, dv.1];
         let p00 = self.point_at_corner(0, 0).unwrap_or_default();
-        let p10 = self.point_at_corner(1, 0).unwrap_or_default();
-        let p11 = self.point_at_corner(1, 1).unwrap_or_default();
         let p01 = self.point_at_corner(0, 1).unwrap_or_default();
-        let v0 = result.add_vertex(p00.clone(), None);
-        let v1 = result.add_vertex(p10.clone(), None);
-        let v2 = result.add_vertex(p11.clone(), None);
-        result.add_face(vec![v0, v1, v2], None);
-        let mut normal;
+        let triangle = p00.distance(&p01, None) < 1e-10;
+        let count = if triangle { 3 } else { 4 };
+        let mut keys = Vec::new();
 
-        if p00.distance(&p01, None) < 1e-10 {
-            let e1 = &p10 - &p00;
-            let e2 = &p11 - &p00;
-            normal = e1.cross(&e2);
-        } else {
-            let v3 = result.add_vertex(p01.clone(), None);
-            result.add_face(vec![v0, v2, v3], None);
-            let derivs = self.evaluate(0.5, 0.5, 1);
-            normal = derivs[1].cross(&derivs[2]);
+        for k in 0..count {
+            keys.push(result.add_vertex(self.point_at(us[k], vs[k]).unwrap_or_default(), None));
+            let vd = result.vertex.get_mut(&keys[k]).unwrap();
+            vd.attributes.insert("u".to_string(), us[k]);
+            vd.attributes.insert("v".to_string(), vs[k]);
         }
+
+        result.add_face(vec![keys[0], keys[1], keys[2]], None);
+
+        if !triangle {
+            result.add_face(vec![keys[0], keys[2], keys[3]], None);
+        }
+
+        let derivs = self.evaluate(0.5 * (du.0 + du.1), 0.5 * (dv.0 + dv.1), 1);
+        let mut normal = derivs[1].cross(&derivs[2]);
 
         if normal.magnitude() > 1e-15 {
             normal = normal.normalized();
