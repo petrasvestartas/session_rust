@@ -2566,8 +2566,14 @@ fn ruled_mesh(b: &BRep, fi: usize, shift: usize, boundary: &mut EdgeBoundary) ->
     let srf = &b.m_surfaces[b.m_faces[fi].surface_index as usize];
     let edges = ruled_edges(b, fi, shift);
     let first = ruled_lift(b, fi, &edges[0], boundary);
-    let second = ruled_lift(b, fi, &edges[2], boundary);
+    let mut second = ruled_lift(b, fi, &edges[2], boundary);
     let n = first.len();
+
+    // the second loop numbered on round the loop, from the ruling where the first ends, so the rulings tag their own two ends
+    if n >= 2 && second.len() == n && (first[n - 1].1[0] - second[0].1[0]).abs() > (first[n - 1].1[0] - second[n - 1].1[0]).abs() {
+        second.reverse();
+    }
+
     let bottom_order = ruled_order(&first);
     let top_order = ruled_order(&second);
     let (du0, du1) = srf.domain(0).unwrap_or((0.0, 1.0));
