@@ -16,9 +16,10 @@ const STACK_SIZE: usize = 64;
 // ═══════════════════════════════════════════════════════════════════════════
 // Curve helpers
 // ═══════════════════════════════════════════════════════════════════════════
-/// Parameter of the closest sample on a dense grid over [t0, t1].
+/// Parameter of the closest sample on a grid over [t0, t1], ten samples per control point of the window's share of the domain, never under fifty.
 fn curve_seed(curve: &NurbsCurve, test_point: &Point, t0: f64, t1: f64) -> f64 {
-    let num_samples = (curve.cv_count() * 10).max(50);
+    let share = (t1 - t0) / (curve.domain_end() - curve.domain_start()).max(f64::MIN_POSITIVE);
+    let num_samples = ((curve.cv_count() as f64 * 10.0 * share.min(1.0)).ceil() as usize).max(50);
     let dt = (t1 - t0) / num_samples as f64;
     let mut best_t = t0;
     let mut best_dist = curve.point_at(t0).distance(test_point, None);

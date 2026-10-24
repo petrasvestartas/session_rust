@@ -135,8 +135,17 @@ fn surface_mid_grid(
 // Curve compatibility
 // ═══════════════════════════════════════════════════════════════════════════
 /// Sorted union of two nurbsknot vectors, equal values kept once.
+/// Within this of each other two nurbsknots of the vectors are one knot: 1e-7 of the wider span, above what insert_nurbsknot treats as the same knot, so a knot nearly on another is never inserted beside it
+fn nurbsknot_tolerance(a: &[f64], b: &[f64]) -> f64 {
+    let span_a = if a.is_empty() { 0.0 } else { a[a.len() - 1] - a[0] };
+    let span_b = if b.is_empty() { 0.0 } else { b[b.len() - 1] - b[0] };
+
+    1e-7 * span_a.max(span_b)
+}
+
+/// Sorted union of two nurbsknot vectors, values within nurbsknot_tolerance kept once at the first vector's value.
 fn merge_nurbsknot_vectors(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let tol = 1e-10;
+    let tol = nurbsknot_tolerance(a, b);
     let mut merged = Vec::new();
     let mut i = 0;
     let mut j = 0;
@@ -168,9 +177,9 @@ fn merge_nurbsknot_vectors(a: &[f64], b: &[f64]) -> Vec<f64> {
     merged
 }
 
-/// True when both nurbsknot vectors match within 1e-10.
+/// True when both nurbsknot vectors match within nurbsknot_tolerance.
 fn nurbsknot_vectors_equal(a: &[f64], b: &[f64]) -> bool {
-    let tol = 1e-10;
+    let tol = nurbsknot_tolerance(a, b);
 
     if a.len() != b.len() {
         return false;
@@ -235,22 +244,64 @@ fn unify_curves(curves: &mut [NurbsCurve]) -> bool {
         unified = merge_nurbsknot_vectors(&unified, &curves[i].get_nurbsknots());
     }
 
-    let tol = 1e-10;
+    let tol = nurbsknot_tolerance(&unified, &unified);
 
     for c in curves.iter_mut() {
         let nurbsknots = c.get_nurbsknots();
         let mut ci = 0;
+        let mut mult = 0;
 
         for ui in 0..unified.len() {
+            if ui == 0 || (unified[ui] - unified[ui - 1]).abs() >= tol {
+                mult = 0;
+            }
+
+            mult += 1;
+
             if ci < nurbsknots.len() && (nurbsknots[ci] - unified[ui]).abs() < tol {
+                if nurbsknots[ci] != unified[ui] {
+                    c.set_nurbsknot(ci, unified[ui]);
+                }
+
                 ci += 1;
-            } else {
-                c.insert_nurbsknot(unified[ui], 1);
+            } else if !c.insert_nurbsknot(unified[ui], mult) {
+                return false;
             }
         }
     }
 
+    for c in curves.iter() {
+        if !nurbsknot_vectors_equal(&c.get_nurbsknots(), &curves[0].get_nurbsknots()) {
+            return false;
+        }
+    }
+
     true
+}
+
+/// Every curve interpolated anew through the same count of points at equal steps of its [0, 1] domain with uniform nurbsknots, so the nurbsknot vectors agree where unification could not make them; false when a curve cannot be interpolated.
+fn resample_curves(curves: &mut [NurbsCurve]) -> bool {
+    let mut count = 4;
+
+    for c in curves.iter() {
+        count = count.max(c.cv_count());
+    }
+
+    for c in curves.iter_mut() {
+        let mut points: Vec<Point> = Vec::new();
+
+        for k in 0..count {
+            points.push(c.point_at(k as f64 / (count - 1) as f64));
+        }
+
+        *c = NurbsCurve::create_interpolated(&points, CurveNurbsKnotStyle::Uniform, CurveInterpStyle::Rhino);
+
+        if !c.is_valid() || !c.set_domain(0.0, 1.0) {
+            return false;
+        }
+    }
+
+    unify_curves(curves)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1275,10 +1326,11 @@ impl Primitives {
 
         let mut curves = vec![curve_a.duplicate(), curve_b.duplicate()];
 
-        if !curves[0].set_domain(0.0, 1.0)
-            || !curves[1].set_domain(0.0, 1.0)
-            || !unify_curves(&mut curves)
-        {
+        if !curves[0].set_domain(0.0, 1.0) || !curves[1].set_domain(0.0, 1.0) {
+            return NurbsSurface::default();
+        }
+
+        if !unify_curves(&mut curves) && !resample_curves(&mut curves) {
             return NurbsSurface::default();
         }
 

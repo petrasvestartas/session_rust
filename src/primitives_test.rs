@@ -399,6 +399,48 @@ pub fn run_primitives_nurbssurface_quad_sphere() -> TestResult {
 // ═══════════════════════════════════════════════════════════════════════════
 // NurbsSurface factory methods
 // ═══════════════════════════════════════════════════════════════════════════
+pub fn run_primitives_nurbssurface_ruled_nearby_knots() -> TestResult {
+    MINI_TEST!("Nurbssurface Ruled Nearby Knots", {
+        use crate::nurbsknot::CurveInterpStyle;
+        use crate::nurbsknot::CurveNurbsKnotStyle;
+        use crate::NurbsCurve;
+        use crate::Point;
+        use crate::Primitives;
+        use crate::Xform;
+
+        let wave = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.8),
+            Point::new(2.5, 0.0, -0.4),
+            Point::new(3.5, 0.0, 0.9),
+            Point::new(5.0, 0.0, 0.0),
+        ];
+        let mut crv_a = NurbsCurve::create_interpolated(&wave, CurveNurbsKnotStyle::Chord, CurveInterpStyle::Rhino);
+        let mut crv_b = crv_a.duplicate();
+        crv_a.set_domain(0.0, 1.0);
+        crv_b.set_domain(0.0, 1.0);
+        crv_b.transform(&Xform::translation(0.0, 3.0, 0.0));
+
+        for k in crv_b.degree()..crv_b.cv_count() - 1 {
+            let knot = crv_b.nurbsknot(k).unwrap_or_default();
+            crv_b.set_nurbsknot(k, knot + 1e-9);
+        }
+
+        let srf = Primitives::create_ruled(&crv_a, &crv_b);
+        let mut apart = 0.0f64;
+
+        for k in 0..=10 {
+            let u = k as f64 / 10.0;
+            apart = apart.max(srf.point_at(u, 0.0).unwrap_or_default().distance(&crv_a.point_at(u), None));
+            apart = apart.max(srf.point_at(u, 1.0).unwrap_or_default().distance(&crv_b.point_at(u), None));
+        }
+
+        MINI_CHECK!(srf.is_valid());
+        MINI_CHECK!(srf.cv_count(0) == crv_a.cv_count() && srf.cv_count(1) == 2);
+        MINI_CHECK!(apart < 1e-6);
+    })
+}
+
 pub fn run_primitives_nurbssurface_ruled() -> TestResult {
     MINI_TEST!("Nurbssurface Ruled", {
         use crate::NurbsCurve;
@@ -2262,6 +2304,11 @@ REGISTER_MINI_TEST!(
     "Primitives",
     "Nurbssurface Quad Sphere",
     crate::primitives_test::run_primitives_nurbssurface_quad_sphere
+);
+REGISTER_MINI_TEST!(
+    "Primitives",
+    "Nurbssurface Ruled Nearby Knots",
+    crate::primitives_test::run_primitives_nurbssurface_ruled_nearby_knots
 );
 REGISTER_MINI_TEST!(
     "Primitives",

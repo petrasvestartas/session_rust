@@ -1,3 +1,4 @@
+use crate::closest::Closest;
 use crate::color::Color;
 use crate::mesh::Mesh;
 use crate::nurbscurve::NurbsCurve;
@@ -2225,6 +2226,413 @@ fn strip_mesh(b: &BRep, fi: usize, boundary: &mut EdgeBoundary, scale: f64, angl
     mesh
 }
 
+/// Phase 1: the side of the surface domain a straight two-point pcurve runs along, corner to corner: 0 along v0, 1 along v1, 2 along u0, 3 along u1; -1 for any other pcurve
+fn ruled_side(srf: &NurbsSurface, crv: &NurbsCurve) -> i32 {
+    if crv.degree() != 1 || crv.is_rational() || crv.cv_count() != 2 {
+        return -1;
+    }
+
+    let (du0, du1) = srf.domain(0).unwrap_or((0.0, 1.0));
+    let (dv0, dv1) = srf.domain(1).unwrap_or((0.0, 1.0));
+    let tolerance_u = (du1 - du0) * 1e-9;
+    let tolerance_v = (dv1 - dv0) * 1e-9;
+    let c0 = crv.get_cv(0).unwrap_or_default();
+    let c1 = crv.get_cv(1).unwrap_or_default();
+
+    for p in [&c0, &c1] {
+        let corner_u = (p[0] - du0).abs().min((p[0] - du1).abs()) <= tolerance_u;
+        let corner_v = (p[1] - dv0).abs().min((p[1] - dv1).abs()) <= tolerance_v;
+
+        if !corner_u || !corner_v {
+            return -1;
+        }
+    }
+
+    if (c0[1] - c1[1]).abs() <= tolerance_v && (c0[0] - c1[0]).abs() > tolerance_u {
+        return if (c0[1] - dv0).abs() <= tolerance_v { 0 } else { 1 };
+    }
+
+    if (c0[0] - c1[0]).abs() <= tolerance_u && (c0[1] - c1[1]).abs() > tolerance_v {
+        return if (c0[0] - du0).abs() <= tolerance_u { 2 } else { 3 };
+    }
+
+    -1
+}
+
+/// Phase 1: a face on the whole domain of a curved surface straight across its rulings, its wire four distinct open edges each a straight pcurve along one domain side: the place in the wire of the edge along v0, so the wire turned there reads as the loop at v0, a ruling, the loop at v1 and a ruling; -1 for any other face
+fn ruled_face(b: &BRep, fi: usize) -> i32 {
+    let face = &b.m_faces[fi];
+
+    if face.wires.len() != 1 {
+        return -1;
+    }
+
+    let edges = b.wire_edges(&face.wires[0]);
+    let srf = &b.m_surfaces[face.surface_index as usize];
+
+    if edges.len() != 4 || srf.degree(1) != 1 || srf.cv_count(1) != 2 || is_planar_patch(srf) {
+        return -1;
+    }
+
+    for side in 0..4 {
+        if srf.is_singular(side) {
+            return -1;
+        }
+    }
+
+    let mut sides = [-1i32; 4];
+
+    for k in 0..4 {
+        let edge = &b.m_edges[edges[k].index as usize];
+        let ci = b.pcurve_index(edges[k].index as usize, fi, edges[k].orientation);
+
+        for j in 0..k {
+            if edges[j].index == edges[k].index {
+                return -1;
+            }
+        }
+
+        if edge.degenerated || edge.start_vertex == edge.end_vertex || ci < 0 {
+            return -1;
+        }
+
+        sides[k] = ruled_side(srf, &b.m_curves_2d[ci as usize]);
+    }
+
+    for side in 0..4i32 {
+        if sides.iter().filter(|&&s| s == side).count() != 1 {
+            return -1;
+        }
+    }
+
+    let shift = sides.iter().position(|&s| s == 0).unwrap_or(0);
+
+    if sides[(shift + 2) % 4] == 1 {
+        shift as i32
+    } else {
+        -1
+    }
+}
+
+/// Phase 1: the wire of a ruled face turned to start at its loop along v0
+fn ruled_edges(b: &BRep, fi: usize, shift: usize) -> Vec<BRepRef> {
+    let mut edges = b.wire_edges(&b.m_faces[fi].wires[0]);
+    edges.rotate_left(shift);
+
+    edges
+}
+
+/// Phase 1: the distinct nurbsknots of a ruled face's surface across u from the start of its domain to its end: the spans within which its loops are smooth, so a kink between two spans never asks for steps
+fn ruled_spans(srf: &NurbsSurface) -> Vec<f64> {
+    let (du0, du1) = srf.domain(0).unwrap_or((0.0, 1.0));
+    let tolerance = (du1 - du0) * 1e-9;
+    let mut spans = vec![du0];
+
+    for k in 0..srf.nurbsknot_count(0) {
+        let knot = srf.nurbsknot(0, k).unwrap_or(du0);
+
+        if knot > spans[spans.len() - 1] + tolerance && knot < du1 - tolerance {
+            spans.push(knot);
+        }
+    }
+
+    spans.push(du1);
+
+    spans
+}
+
+/// Phase 1: the stations across u of a ruled face: every span at its own count of equal steps
+fn ruled_steps(spans: &[f64], counts: &[usize]) -> Vec<f64> {
+    let mut steps: Vec<f64> = Vec::new();
+
+    for span in 0..spans.len() - 1 {
+        for k in 0..counts[span] {
+            steps.push(spans[span] + (spans[span + 1] - spans[span]) * k as f64 / counts[span] as f64);
+        }
+    }
+
+    steps.push(spans[spans.len() - 1]);
+
+    steps
+}
+
+/// Phase 1: how far one span of a ruled face at count equal steps is from the quality asked, on whichever loop and step is worse: the sag of a chord over the tolerance or the turn of the normals over the angle, as a share of what is allowed; zero or below when the span passes, the normals taken just inside a step so a kink at a station is not a turn
+fn ruled_excess(srf: &NurbsSurface, u0: f64, u1: f64, count: usize, cosine: f64, tolerance: f64) -> f64 {
+    let (dv0, dv1) = srf.domain(1).unwrap_or((0.0, 1.0));
+    let mut excess = -1.0f64;
+
+    for v in [dv0, dv1] {
+        for k in 0..count {
+            let ua = u0 + (u1 - u0) * k as f64 / count as f64;
+            let ub = u0 + (u1 - u0) * (k + 1) as f64 / count as f64;
+            let inside = (ub - ua) * 1e-6;
+            let a = srf.point_at(ua, v).unwrap_or_default();
+            let z = srf.point_at(ub, v).unwrap_or_default();
+            let middle = srf.point_at((ua + ub) * 0.5, v).unwrap_or_default();
+            let sag = middle.distance(&(&a + (&z - &a) * 0.5), None);
+            let dot = srf.normal_at(ua + inside, v).dot(&srf.normal_at(ub - inside, v));
+            let sag_excess = if tolerance > 0.0 { sag / tolerance - 1.0 } else { -1.0 };
+            excess = excess.max(sag_excess).max((cosine - dot) / (1.0 - cosine));
+        }
+    }
+
+    excess
+}
+
+/// Phase 1: the steps of every span of a ruled face: one, doubled while the span is coarser than the chord tolerance measured against the whole BRep or the angle allows and doubling still brings it closer, so a kink or a fold inside a span does not ask for ever more steps; 4096 stations at most over all spans
+fn ruled_counts(srf: &NurbsSurface, spans: &[f64], scale: f64, angle: f64, chord: f64) -> Vec<usize> {
+    let tolerance = scale * chord;
+    let cosine = (angle.clamp(0.1, 179.0) * PI / 180.0).cos();
+    let mut counts = vec![1usize; spans.len() - 1];
+    let mut total = counts.len();
+
+    for span in 0..spans.len() - 1 {
+        let mut excess = ruled_excess(srf, spans[span], spans[span + 1], counts[span], cosine, tolerance);
+
+        while excess > 0.0 && total + counts[span] <= 4096 {
+            let finer = ruled_excess(srf, spans[span], spans[span + 1], 2 * counts[span], cosine, tolerance);
+
+            if finer > 0.75 * excess {
+                break;
+            }
+
+            total += counts[span];
+            counts[span] *= 2;
+            excess = finer;
+        }
+    }
+
+    counts
+}
+
+/// Phase 1: the canonical points of a loop of a ruled face lifted onto the face along the loop's own iso curve, each the parameter of its closest point there searched between the neighbours of its nearest sample of the curve, in the loop's traversal order with equal parameters kept once; empty while nobody has sampled the edge
+fn ruled_lift(b: &BRep, fi: usize, er: &BRepRef, boundary: &EdgeBoundary) -> Vec<(f64, Point, Point)> {
+    let mut samples: Vec<(f64, Point, Point)> = Vec::new();
+
+    let Some(points) = boundary.points.get(&(er.index as usize)) else {
+        return samples;
+    };
+
+    let srf = &b.m_surfaces[b.m_faces[fi].surface_index as usize];
+    let ci = b.pcurve_index(er.index as usize, fi, er.orientation);
+    let crv = &b.m_curves_2d[ci as usize];
+    let c0 = crv.get_cv(0).unwrap_or_default();
+    let c1 = crv.get_cv(1).unwrap_or_default();
+    let iso = srf.iso_curve(0, c0[1]).unwrap_or_default();
+    let (t0, t1) = crv.domain();
+    let (du0, du1) = srf.domain(0).unwrap_or((0.0, 1.0));
+    let count = (iso.cv_count() * 10).max(50);
+    let table: Vec<Point> = (0..=count).map(|k| iso.point_at(du0 + (du1 - du0) * k as f64 / count as f64)).collect();
+
+    for p in points {
+        let mut nearest = 0;
+
+        for k in 1..=count {
+            if table[k].distance(p, None) < table[nearest].distance(p, None) {
+                nearest = k;
+            }
+        }
+
+        let lo = du0 + (du1 - du0) * nearest.saturating_sub(1) as f64 / count as f64;
+        let hi = du0 + (du1 - du0) * (nearest + 1).min(count) as f64 / count as f64;
+        let u = Closest::curve_point(&iso, p, lo, hi).0;
+        let t = t0 + (t1 - t0) * (u - c0[0]) / (c1[0] - c0[0]);
+        samples.push((t, Point::new(u, c0[1], 0.0), p.clone()));
+    }
+
+    samples.sort_by(|a, z| a.0.total_cmp(&z.0));
+    samples.dedup_by(|a, z| a.0 == z.0);
+
+    samples
+}
+
+/// Phase 1: the stations across u where a ruled face runs its rulings: its own steps in every span and the u of every canonical point of either loop, sorted and merged within the tolerance
+fn ruled_stations(
+    spans: &[f64],
+    counts: &[usize],
+    first: &[(f64, Point, Point)],
+    second: &[(f64, Point, Point)],
+    tolerance: f64,
+) -> Vec<f64> {
+    let mut stations: Vec<f64> = ruled_steps(spans, counts);
+
+    for lifted in [first, second] {
+        for sample in lifted {
+            stations.push(sample.1[0]);
+        }
+    }
+
+    stations.sort_by(f64::total_cmp);
+    let mut merged: Vec<f64> = Vec::new();
+
+    for u in stations {
+        if merged.last().is_none_or(|last| u - last > tolerance) {
+            merged.push(u);
+        }
+    }
+
+    merged
+}
+
+/// Phase 1: the stations a loop of a ruled face has no canonical point at yet, added to its edge at the loop's v up to 4096 points on the edge, the domain ends snapped onto the edge's vertices; true when any was added
+fn ruled_extend(
+    srf: &NurbsSurface,
+    v: f64,
+    stations: &[f64],
+    lifted: &[(f64, Point, Point)],
+    tolerance: f64,
+    ends: &(Point, Point),
+    points: &mut Vec<Point>,
+) -> bool {
+    let (du0, du1) = srf.domain(0).unwrap_or((0.0, 1.0));
+    let mut added = false;
+
+    for &u in stations {
+        let mut present = false;
+
+        for sample in lifted {
+            present = present || (sample.1[0] - u).abs() <= tolerance;
+        }
+
+        if present || points.len() >= 4096 {
+            continue;
+        }
+
+        let mut p = srf.point_at(u, v).unwrap_or_default();
+
+        if (u - du0).abs() <= tolerance || (u - du1).abs() <= tolerance {
+            p = if p.distance(&ends.0, None) <= p.distance(&ends.1, None) { ends.0.clone() } else { ends.1.clone() };
+        }
+
+        points.push(p);
+        added = true;
+    }
+
+    added
+}
+
+/// Phase 1: the rulings of every ruled face agreed with its neighbours: each pass every face asks its stations of both loops and adds the points a loop lacks, which the faces sharing that edge pick up on the next pass, until no face adds a point or sixteen passes are spent
+fn ruled_boundaries(b: &BRep, face_ruled: &[i32], boundary: &mut EdgeBoundary, scale: f64, angle: f64, chord: f64) {
+    let mut spans: Vec<Vec<f64>> = vec![Vec::new(); face_ruled.len()];
+    let mut counts: Vec<Vec<usize>> = vec![Vec::new(); face_ruled.len()];
+
+    for fi in 0..face_ruled.len() {
+        if face_ruled[fi] >= 0 {
+            spans[fi] = ruled_spans(&b.m_surfaces[b.m_faces[fi].surface_index as usize]);
+            counts[fi] = ruled_counts(&b.m_surfaces[b.m_faces[fi].surface_index as usize], &spans[fi], scale, angle, chord);
+        }
+    }
+
+    for _pass in 0..16 {
+        let mut changed = false;
+
+        for fi in 0..face_ruled.len() {
+            if face_ruled[fi] < 0 {
+                continue;
+            }
+
+            let srf = &b.m_surfaces[b.m_faces[fi].surface_index as usize];
+            let edges = ruled_edges(b, fi, face_ruled[fi] as usize);
+            let (du0, du1) = srf.domain(0).unwrap_or((0.0, 1.0));
+            let (dv0, dv1) = srf.domain(1).unwrap_or((0.0, 1.0));
+            let tolerance = (du1 - du0) * 1e-6;
+            let first = ruled_lift(b, fi, &edges[0], boundary);
+            let second = ruled_lift(b, fi, &edges[2], boundary);
+            let stations = ruled_stations(&spans[fi], &counts[fi], &first, &second, tolerance);
+            let ends_first = edge_ends(b, edges[0].index as usize);
+            let ends_second = edge_ends(b, edges[2].index as usize);
+            let points_first = boundary.points.entry(edges[0].index as usize).or_default();
+            changed = ruled_extend(srf, dv0, &stations, &first, tolerance, &ends_first, points_first) || changed;
+            let points_second = boundary.points.entry(edges[2].index as usize).or_default();
+            changed = ruled_extend(srf, dv1, &stations, &second, tolerance, &ends_second, points_second) || changed;
+        }
+
+        if !changed {
+            return;
+        }
+    }
+}
+
+/// Phase 1: the order of lifted samples by increasing u
+fn ruled_order(lifted: &[(f64, Point, Point)]) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..lifted.len()).collect();
+    order.sort_by(|&i, &j| lifted[i].1[0].total_cmp(&lifted[j].1[0]));
+
+    order
+}
+
+/// Phase 1: the mesh of a ruled face: both loops at the agreed stations, paired ruling by ruling into two triangles per step so no triangle spans two rulings, degenerate triangles at a collapsed ruling skipped, the loop numbered as the CDT polygon (loop at v0, ruling, loop at v1, ruling) so the edge uses tag as there; empty when the loops disagree on their stations
+fn ruled_mesh(b: &BRep, fi: usize, shift: usize, boundary: &mut EdgeBoundary) -> Mesh {
+    let srf = &b.m_surfaces[b.m_faces[fi].surface_index as usize];
+    let edges = ruled_edges(b, fi, shift);
+    let first = ruled_lift(b, fi, &edges[0], boundary);
+    let second = ruled_lift(b, fi, &edges[2], boundary);
+    let n = first.len();
+    let bottom_order = ruled_order(&first);
+    let top_order = ruled_order(&second);
+    let (du0, du1) = srf.domain(0).unwrap_or((0.0, 1.0));
+    let tolerance = (du1 - du0) * 1e-6;
+    let mut mesh = Mesh::new();
+
+    if n < 2 || second.len() != n {
+        return mesh;
+    }
+
+    for k in 0..n {
+        if (first[bottom_order[k]].1[0] - second[top_order[k]].1[0]).abs() > tolerance {
+            return mesh;
+        }
+    }
+
+    for k in [1, 3] {
+        if !boundary.points.contains_key(&(edges[k].index as usize)) {
+            let ends = edge_ends(b, edges[k].index as usize);
+            boundary.points.insert(edges[k].index as usize, vec![ends.0, ends.1]);
+        }
+    }
+
+    let mut loops = TrimLoops::default();
+    loops.uv.push(vec![Point::new(0.0, 0.0, 0.0); 2 * n]);
+    loops.xyz.push(vec![Point::new(0.0, 0.0, 0.0); 2 * n]);
+    let mut bottom: Vec<usize> = Vec::new();
+    let mut top: Vec<usize> = Vec::new();
+
+    for k in 0..n {
+        bottom.push(strip_vertex(srf, &mut mesh, &first[k], k));
+        top.push(strip_vertex(srf, &mut mesh, &second[k], n + k));
+        loops.uv[0][k] = first[k].1.clone();
+        loops.xyz[0][k] = first[k].2.clone();
+        loops.uv[0][n + k] = second[k].1.clone();
+        loops.xyz[0][n + k] = second[k].2.clone();
+    }
+
+    for k in 0..n - 1 {
+        let quad = [bottom[bottom_order[k]], bottom[bottom_order[k + 1]], top[top_order[k + 1]], top[top_order[k]]];
+
+        for triangle in [[quad[0], quad[1], quad[2]], [quad[0], quad[2], quad[3]]] {
+            let a = mesh.vertex[&triangle[0]].position();
+            let c = mesh.vertex[&triangle[1]].position();
+            let d = mesh.vertex[&triangle[2]].position();
+
+            if !same_boundary_point(&a, &c) && !same_boundary_point(&c, &d) && !same_boundary_point(&d, &a) {
+                mesh.add_face(vec![triangle[0], triangle[1], triangle[2]], None);
+            }
+        }
+    }
+
+    let start = &first[bottom_order[0]].1;
+    wind_to_normal(&mut mesh, &srf.normal_at(start[0], start[1]));
+    let uses: Vec<(usize, usize, usize, usize)> = vec![
+        (edges[0].index as usize, 0, 0, n),
+        (edges[1].index as usize, 0, n - 1, 2),
+        (edges[2].index as usize, 0, n, n),
+        (edges[3].index as usize, 0, 2 * n - 1, 2),
+    ];
+    tag_edge_uses(&mut mesh, &loops, &uses);
+
+    mesh
+}
+
 /// Flip every face mesh of a face Reversed in its shell, vertex normals included
 fn flip_reversed_faces(b: &BRep, fmesh: &mut [Mesh]) {
     for (fi, fm) in fmesh.iter_mut().enumerate() {
@@ -3414,6 +3822,7 @@ impl BRep {
         let (angle, chord) = quality.unwrap_or((20.0, 0.005));
         let scale = brep_diagonal(self);
         let mut face_strip = vec![false; nf];
+        let mut face_ruled = vec![-1i32; nf];
         let mut face_direct = vec![false; nf];
         let mut rebuild_grid = vec![false; nf];
         let mut fmesh: Vec<Mesh> = Vec::new();
@@ -3428,8 +3837,28 @@ impl BRep {
             }
         }
 
+        for fi in 0..nf {
+            if !face_strip[fi] {
+                face_ruled[fi] = ruled_face(self, fi);
+            }
+        }
+
+        ruled_boundaries(self, &face_ruled, &mut boundary, scale, angle, chord);
+
+        for fi in 0..nf {
+            if face_ruled[fi] < 0 {
+                continue;
+            }
+
+            fmesh[fi] = ruled_mesh(self, fi, face_ruled[fi] as usize, &mut boundary);
+
+            if fmesh[fi].face.is_empty() {
+                face_ruled[fi] = -1;
+            }
+        }
+
         for (fi, direct) in face_direct.iter_mut().enumerate() {
-            *direct = !face_strip[fi] && direct_face(self, fi);
+            *direct = !face_strip[fi] && face_ruled[fi] < 0 && direct_face(self, fi);
         }
 
         for fi in 0..nf {
@@ -3463,7 +3892,7 @@ impl BRep {
         }
 
         for fi in 0..nf {
-            if face_strip[fi] || face_direct[fi] {
+            if face_strip[fi] || face_ruled[fi] >= 0 || face_direct[fi] {
                 continue;
             }
 

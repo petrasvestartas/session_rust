@@ -562,6 +562,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "BRep",
+            name: "Ruled Watertight",
+            func: run_brep_ruled_watertight,
+        },
+        RegisteredTest {
+            group: "BRep",
             name: "Mesh Orientation",
             func: run_brep_mesh_orientation,
         },
@@ -2897,6 +2902,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Primitives",
             name: "Nurbssurface Quad Sphere",
             func: run_primitives_nurbssurface_quad_sphere,
+        },
+        RegisteredTest {
+            group: "Primitives",
+            name: "Nurbssurface Ruled Nearby Knots",
+            func: run_primitives_nurbssurface_ruled_nearby_knots,
         },
         RegisteredTest {
             group: "Primitives",
