@@ -27,6 +27,7 @@ pub mod boolean_polyline;
 pub mod boolean_polyline_test;
 pub mod brep;
 pub mod brep_test;
+mod display_budget;
 pub mod closest;
 pub mod closest_test;
 pub mod collection;

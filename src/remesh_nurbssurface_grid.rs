@@ -15,6 +15,8 @@ pub struct RemeshNurbsSurfaceGrid;
 // ═══════════════════════════════════════════════════════════════════════════
 const MAX_SUBS: usize = 24;
 
+fn max_subs() -> usize { crate::display_budget::subdivisions(MAX_SUBS) }
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Sampling
 // ═══════════════════════════════════════════════════════════════════════════
@@ -152,13 +154,13 @@ fn span_subs(
         if degree > 1 {
             let angle = span_angle(s, dir, sp[i], sp[i + 1], osp);
 
-            subs[i] = ((angle / max_angle_deg).ceil() as usize).clamp(1, MAX_SUBS);
+            subs[i] = ((angle / max_angle_deg).ceil() as usize).clamp(1, max_subs());
         }
 
         let dev = span_deviation(s, dir, sp[i], sp[i + 1], osp);
 
         if dev > chord_tol {
-            subs[i] = subs[i].max(((dev / chord_tol).sqrt().ceil() as usize).clamp(2, MAX_SUBS));
+            subs[i] = subs[i].max(((dev / chord_tol).sqrt().ceil() as usize).clamp(2, max_subs()));
         }
 
         if degree > 1 {
@@ -208,6 +210,8 @@ fn balance_subs(
         total_v += sub;
     }
 
+    if !crate::display_budget::charge_evaluations(total_u.max(10).saturating_add(total_v.max(10)).saturating_add(2)) { return; }
+
     let u_len = isocurve_length(
         s,
         0,
@@ -233,13 +237,13 @@ fn balance_subs(
         let scale = ratio.sqrt();
 
         for sub in u_subs.iter_mut() {
-            *sub = MAX_SUBS.min((*sub as f64 * scale).ceil() as usize);
+            *sub = max_subs().min((*sub as f64 * scale).ceil() as usize);
         }
     } else if ratio < 0.5 && s.degree(1) > 1 {
         let scale = (1.0 / ratio).sqrt();
 
         for sub in v_subs.iter_mut() {
-            *sub = MAX_SUBS.min((*sub as f64 * scale).ceil() as usize);
+            *sub = max_subs().min((*sub as f64 * scale).ceil() as usize);
         }
     }
 }
@@ -264,7 +268,7 @@ fn twist_subs(s: &NurbsSurface, usp: &[f64], vsp: &[f64], twist_tol: f64) -> usi
         return 1;
     }
 
-    ((2.0 * (max_twist / twist_tol).sqrt()).ceil() as usize).clamp(4, MAX_SUBS)
+    ((2.0 * (max_twist / twist_tol).sqrt()).ceil() as usize).clamp(4, max_subs())
 }
 
 /// One more subdivision on the largest span when the total is even, so a closed direction triangulates seamlessly.
@@ -295,7 +299,9 @@ fn set_odd_total(subs: &mut [usize]) {
 // ═══════════════════════════════════════════════════════════════════════════
 /// n parameters spaced evenly by arc length along the iso-curve at fixed.
 fn arclen_params(s: &NurbsSurface, dir: usize, n: usize, sp: &[f64], fixed: f64) -> Vec<f64> {
+    if !crate::display_budget::charge_scalars(n.saturating_mul(44).saturating_add(402)) { return Vec::new(); }
     let nsample = (n * 20).max(200);
+    if !crate::display_budget::charge_evaluations(nsample.saturating_add(1)) { return Vec::new(); }
 
     let mut st = vec![0.0; nsample + 1];
     let mut sl = vec![0.0; nsample + 1];
@@ -341,6 +347,7 @@ fn arclen_params(s: &NurbsSurface, dir: usize, n: usize, sp: &[f64], fixed: f64)
 
 /// Every span split into its subdivisions, ending on the last span boundary.
 fn span_params(sp: &[f64], subs: &[usize]) -> Vec<f64> {
+    if !crate::display_budget::charge_scalars(subs.iter().copied().fold(1usize, usize::saturating_add).saturating_mul(4)) { return Vec::new(); }
     let mut params = Vec::new();
 
     for i in 0..sp.len() - 1 {
@@ -374,6 +381,7 @@ fn fix_closed_gap(params: &mut Vec<f64>, domain_end: f64) {
     }
 
     let extra = (wrap_gap / max_gap).ceil() as usize - 1;
+    if !crate::display_budget::charge_scalars(extra.saturating_mul(4).saturating_add(params.capacity().saturating_mul(2))) { params.clear(); return; }
     let step = wrap_gap / (extra + 1) as f64;
 
     for _ in 1..=extra {
@@ -653,6 +661,7 @@ fn crease_target(
         return key;
     }
 
+    if !crate::display_budget::charge(4) { return key; }
     let target = mesh.add_vertex(mesh.vertex[&key].position(), None);
 
     mesh.vertex.insert(target, mesh.vertex[&key].clone());
@@ -680,6 +689,11 @@ impl RemeshNurbsSurfaceGrid {
     ) -> Mesh {
         let usp = s.get_span_vector(0);
         let vsp = s.get_span_vector(1);
+        let u_spans = usp.len().saturating_sub(1);
+        let v_spans = vsp.len().saturating_sub(1);
+        let evaluations = u_spans.saturating_mul(v_spans).saturating_mul(10)
+            .saturating_add(u_spans.saturating_add(v_spans).saturating_mul(20));
+        if !crate::display_budget::charge_evaluations(evaluations) { return Mesh::new(); }
         let bbox_diag = bbox_diagonal(s);
         let chord_tol = bbox_diag * chord_factor;
 
@@ -687,6 +701,7 @@ impl RemeshNurbsSurfaceGrid {
         let mut v_subs = span_subs(s, 1, &vsp, &usp, max_angle_deg, chord_tol);
 
         balance_subs(s, &usp, &vsp, &mut u_subs, &mut v_subs);
+        if crate::display_budget::failed() { return Mesh::new(); }
 
         let sing_v0 = s.is_singular(0);
         let sing_v1 = s.is_singular(2);
@@ -712,8 +727,11 @@ impl RemeshNurbsSurfaceGrid {
         let v_mid = (vsp[0] + vsp[vsp.len() - 1]) * 0.5;
 
         let us = grid_params(s, 0, max_u, &usp, v_mid, u_subs);
+        if crate::display_budget::failed() { return Mesh::new(); }
         let vs = grid_params(s, 1, max_v, &vsp, u_mid, v_subs);
+        if crate::display_budget::failed() { return Mesh::new(); }
         let nv = vs.len();
+        if !crate::display_budget::charge(us.len().saturating_mul(nv).saturating_mul(2)) { return Mesh::new(); }
 
         if sing_v0 && sing_v1 && nv < 3 {
             return Mesh::new();

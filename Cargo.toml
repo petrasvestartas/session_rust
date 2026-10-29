@@ -26,6 +26,7 @@ pdf = ["dep:mupdf", "dep:earcutr"]
 # and the linker then drops the test code: 6 MB of the viewer's 17 MB.
 default = ["minitests"]
 minitests = []
+viewer-display = []
 
 # PDF deps are declared ONLY for non-wasm targets, so a wasm32 build cannot pull MuPDF even if
 # something enables `pdf` - the viewer is structurally safe rather than relying on flag discipline.

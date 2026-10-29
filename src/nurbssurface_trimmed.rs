@@ -48,6 +48,7 @@ fn crease_side_normal(
 
 /// Winding-number test of (u, v) against a closed UV polygon.
 fn point_in_polygon_2d(u: f64, v: f64, poly: &[Point]) -> bool {
+    if !crate::display_budget::charge_operations(poly.len()) { return false; }
     let mut winding = 0;
     let n = poly.len();
 
@@ -1509,6 +1510,12 @@ struct Triangle {
     alive: bool,            // False once removed.
 }
 
+fn charge_triangle_history(count: usize) -> bool {
+    // Dead triangles remain stored; reserve old/new Vec capacity and visit stamps for every append.
+    crate::display_budget::charge_bytes(count.saturating_mul(128))
+        && crate::display_budget::charge_operations(count.saturating_mul(3))
+}
+
 /// Incremental constrained Delaunay triangulation in UV with Bowyer-Watson insertion.
 struct Delaunay2D {
     vertices: Vec<Vertex2D>,  // Vertices, the super triangle first.
@@ -1571,6 +1578,7 @@ impl Delaunay2D {
             visit_epoch: 0,
             visit_stamp: Vec::new(),
         };
+        if !crate::display_budget::charge(9) || !charge_triangle_history(1) { return dt; }
         dt.vertices.push(Vertex2D {
             x: cx - scale * d,
             y: cy - scale * d,
@@ -1657,6 +1665,7 @@ impl Delaunay2D {
             start_tri = self.triangles.len() as i32 - 1;
 
             while start_tri >= 0 && !self.triangles[start_tri as usize].alive {
+                if !crate::display_budget::charge_operations(1) { return -1; }
                 start_tri -= 1;
             }
 
@@ -1669,6 +1678,7 @@ impl Delaunay2D {
         let max_iter = self.triangles.len() as i32;
 
         for _ in 0..max_iter {
+            if !crate::display_budget::charge_operations(1) { return -1; }
             let t = &self.triangles[cur as usize];
             let mut moved = false;
 
@@ -1704,6 +1714,7 @@ impl Delaunay2D {
 
     /// Insert a point and return its vertex index, the existing one when coincident.
     fn insert(&mut self, x: f64, y: f64) -> i32 {
+        if crate::display_budget::failed() { return -1; }
         let start = self.locate(x, y, self.last_found);
         let existing = self.find_coincident(start, x, y);
 
@@ -1711,6 +1722,7 @@ impl Delaunay2D {
             return existing;
         }
 
+        if !crate::display_budget::charge(3) { return -1; }
         let vi = self.vertices.len() as i32;
         self.vertices.push(Vertex2D { x, y });
         let bad = self.collect_cavity(start, x, y);
@@ -1805,6 +1817,7 @@ impl Delaunay2D {
         let mut front = 0;
 
         while front < bad.len() {
+            if !crate::display_budget::charge_operations(1) { return Vec::new(); }
             let ti = bad[front];
             front += 1;
 
@@ -1835,6 +1848,7 @@ impl Delaunay2D {
 
     /// Edges of the bad triangles that face a good neighbour or the hull.
     fn cavity_polygon(&self, bad: &[i32]) -> Vec<(i32, i32, bool)> {
+        if !crate::display_budget::charge_operations(bad.len().saturating_mul(2)) { return Vec::new(); }
         let mut bad_set: HashSet<i32> = HashSet::new();
 
         for &ti in bad {
@@ -1860,6 +1874,8 @@ impl Delaunay2D {
 
     /// Replace the bad triangles by a fan from vertex vi to the polygon edges.
     fn fill_cavity(&mut self, vi: i32, bad: &[i32], polygon: &[(i32, i32, bool)]) {
+        if !charge_triangle_history(polygon.len())
+            || !crate::display_budget::charge_operations(bad.len().saturating_mul(4)) { return; }
         for &ti in bad {
             self.unregister_edges(ti);
             self.triangles[ti as usize].alive = false;
@@ -1917,6 +1933,7 @@ impl Delaunay2D {
 
     /// Mark v0-v1 constrained when it already is a triangle edge; false when it is not.
     fn constrain_existing(&mut self, v0: i32, v1: i32) -> bool {
+        if !crate::display_budget::charge_operations(self.triangles.len()) { return false; }
         for ti in 0..self.triangles.len() {
             if !self.triangles[ti].alive {
                 continue;
@@ -1954,6 +1971,7 @@ impl Delaunay2D {
 
     /// Lowest live triangle with vertex v, -1 when none.
     fn first_triangle_at(&self, v: i32) -> i32 {
+        if !crate::display_budget::charge_operations(self.triangles.len()) { return -1; }
         for ti in 0..self.triangles.len() {
             if self.triangles[ti].alive && self.has_vertex(ti as i32, v) {
                 return ti as i32;
@@ -1972,6 +1990,7 @@ impl Delaunay2D {
         let mut ti = start_ti;
 
         for _ in 0..self.triangles.len() + 4 {
+            if !crate::display_budget::charge_operations(1) { return None; }
             if !self.triangles[ti as usize].alive {
                 return None;
             }
@@ -2025,6 +2044,7 @@ impl Delaunay2D {
         let mut cur_it = intersected[0];
 
         for _ in 0..self.triangles.len() * 2 + 8 {
+            if !crate::display_budget::charge_operations(1) { return; }
             if self.has_vertex(cur_it, v1) {
                 break;
             }
@@ -2080,6 +2100,8 @@ impl Delaunay2D {
         poly_r: &[i32],
         intersected: &[i32],
     ) {
+        if !charge_triangle_history(poly_l.len().saturating_add(poly_r.len()))
+            || !crate::display_budget::charge_operations(intersected.len().saturating_mul(4)) { return; }
         for &ti in intersected {
             self.unregister_edges(ti);
             self.triangles[ti as usize].alive = false;
@@ -2101,6 +2123,7 @@ impl Delaunay2D {
 
     /// Constrain every edge of a triangle from first_new on that its older neighbour holds constrained.
     fn inherit_constraints(&mut self, first_new: usize) {
+        if !crate::display_budget::charge_operations(self.triangles.len().saturating_sub(first_new)) { return; }
         for new_ti in first_new..self.triangles.len() {
             if !self.triangles[new_ti].alive {
                 continue;
@@ -2127,6 +2150,7 @@ impl Delaunay2D {
 
     /// Mark the edge v0-v1 constrained in every live triangle that has it.
     fn mark_edge(&mut self, v0: i32, v1: i32) {
+        if !crate::display_budget::charge_operations(self.triangles.len()) { return; }
         for tri in &mut self.triangles {
             if !tri.alive {
                 continue;
@@ -2178,6 +2202,7 @@ impl Delaunay2D {
 
     /// Drop the triangles touching the super triangle.
     fn cleanup(&mut self) {
+        if !crate::display_budget::charge_operations(self.triangles.len().saturating_mul(2)) { return; }
         let sv = self.super_v;
 
         for ti in 0..self.triangles.len() {
@@ -2209,6 +2234,7 @@ impl Delaunay2D {
 
     /// Vertex index triples of the live triangles.
     fn get_triangles(&self) -> Vec<[i32; 3]> {
+        if !crate::display_budget::charge_operations(self.triangles.len()) { return Vec::new(); }
         let mut result = Vec::new();
 
         for t in &self.triangles {
@@ -2417,10 +2443,12 @@ fn insert_loops(
 
         for p in pts {
             vis.push(dt.insert(p[0], p[1]));
+            if crate::display_budget::failed() { return Vec::new(); }
         }
 
         for i in 0..vis.len() {
             insert_loop_edge(dt, pts, &vis, li, i, crease_knots, boundary_intervals);
+            if crate::display_budget::failed() { return Vec::new(); }
         }
 
         loop_vids.push(vis);
@@ -2499,6 +2527,8 @@ fn refinement_points(
     deflection: f64,
     cos_max_angle: f64,
 ) -> Vec<[f64; 2]> {
+    if !crate::display_budget::charge_scalars(dt.triangles.len().saturating_mul(6))
+        || !crate::display_budget::charge_operations(dt.triangles.len()) { return Vec::new(); }
     let mut to_insert: Vec<[f64; 2]> = Vec::new();
 
     for tri in &dt.triangles {
@@ -2516,6 +2546,7 @@ fn refinement_points(
             continue;
         }
 
+        if !crate::display_budget::charge_evaluations(7) { return Vec::new(); }
         let pa = surface.point_at(a.x, a.y).unwrap_or_default();
         let pb = surface.point_at(b.x, b.y).unwrap_or_default();
         let pc = surface.point_at(c.x, c.y).unwrap_or_default();
@@ -2567,6 +2598,7 @@ fn refine(
             break;
         }
 
+        if crate::display_budget::failed() { return; }
         for uv in &to_insert {
             if dt.vertices.len() >= MAX_VERTS {
                 break;
@@ -2584,6 +2616,7 @@ fn refine(
 /// Drop the super triangle and every triangle whose centroid lies outside the loops.
 fn trim_outside(dt: &mut Delaunay2D, loops_uv: &[Vec<Point>], bounds: &[f64; 4]) {
     dt.cleanup();
+    if !crate::display_budget::charge_operations(dt.triangles.len()) { return; }
 
     for ti in 0..dt.triangles.len() {
         if !dt.triangles[ti].alive {
@@ -2689,6 +2722,7 @@ fn weld_vertices(
     loop_vids: &[Vec<i32>],
     boundary_intervals: &BTreeMap<usize, (usize, usize, f64)>,
 ) -> Vec<Option<usize>> {
+    if !crate::display_budget::charge_evaluations(dt.vertices.len()) { return Vec::new(); }
     let given = given_points(dt.vertices.len(), loops, loop_vids);
     let mut vert_map: Vec<Option<usize>> = vec![None; dt.vertices.len()];
 
@@ -2756,6 +2790,7 @@ fn set_vertex_normals(
     dt: &Delaunay2D,
     vert_map: &[Option<usize>],
 ) {
+    if !crate::display_budget::charge_evaluations(vert_map.len()) { return; }
     let fan = fan_normals(mesh);
 
     for vi in 0..vert_map.len() {
@@ -3621,7 +3656,9 @@ impl NurbsSurfaceTrimmed {
         let mut dt = Delaunay2D::new(bounds[0], bounds[1], bounds[2], bounds[3]);
         let mut boundary_intervals: BTreeMap<usize, (usize, usize, f64)> = BTreeMap::new();
         let loop_vids = insert_loops(&mut dt, &loops.uv, &crease_knots, &mut boundary_intervals);
+        if crate::display_budget::failed() { return Mesh::new(); }
         insert_crease_lines(&mut dt, &loops.uv, &bounds, &crease_knots);
+        if crate::display_budget::failed() { return Mesh::new(); }
 
         for p in &loops.interior_uv {
             if inside_loops(p[0], p[1], &loops.uv, &bounds) {
@@ -3638,6 +3675,7 @@ impl NurbsSurfaceTrimmed {
             deflection,
             cos_max_angle,
         );
+        if crate::display_budget::failed() { return Mesh::new(); }
         trim_outside(&mut dt, &loops.uv, &bounds);
         let tris = dt.get_triangles();
 
@@ -3662,8 +3700,10 @@ impl NurbsSurfaceTrimmed {
             &loop_vids,
             &boundary_intervals,
         );
+        if crate::display_budget::failed() { return Mesh::new(); }
         add_faces(&mut result, &tris, &vert_map);
         set_vertex_normals(&mut result, &self.m_surface, &dt, &vert_map);
+        if crate::display_budget::failed() { return Mesh::new(); }
         tag_boundary(&mut result, &loop_vids, &boundary_intervals, &vert_map);
         RemeshNurbsSurfaceGrid::split_crease_normals(&self.m_surface, &mut result);
 
@@ -3705,5 +3745,44 @@ impl PartialEq for NurbsSurfaceTrimmed {
         }
 
         self.m_inner_loops == other.m_inner_loops
+    }
+}
+
+#[cfg(all(test, feature = "viewer-display"))]
+mod display_budget_tests {
+    use super::*;
+
+    fn triangles() -> Vec<[i32; 3]> {
+        let mut mesh = Delaunay2D::new(0.0, 0.0, 1.0, 1.0);
+        for y in 0..8 {
+            for x in 0..8 {
+                mesh.insert(x as f64 / 8.0, y as f64 / 8.0);
+                if crate::display_budget::failed() { return Vec::new(); }
+            }
+        }
+        mesh.cleanup();
+        mesh.get_triangles()
+    }
+
+    #[test]
+    fn triangle_history_reservation_covers_growth_and_visit_stamps() {
+        assert!(3 * (std::mem::size_of::<Triangle>() + std::mem::size_of::<i32>()) <= 128);
+    }
+
+    #[test]
+    fn bounded_cdt_is_atomic_and_does_not_change_default_triangulation() {
+        let ordinary = triangles();
+        assert!(!ordinary.is_empty());
+        {
+            let _budget = crate::display_budget::Budget::new(1);
+            assert!(triangles().is_empty());
+            assert!(crate::display_budget::failed());
+        }
+        {
+            let _budget = crate::display_budget::Budget::new(512);
+            assert_eq!(triangles(), ordinary);
+            assert!(!crate::display_budget::failed());
+        }
+        assert_eq!(triangles(), ordinary);
     }
 }
