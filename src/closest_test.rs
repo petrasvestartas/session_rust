@@ -154,6 +154,21 @@ pub fn run_closest_surface_point() -> TestResult {
     })
 }
 
+pub fn run_closest_surface_point_beside_a_closed_seam() -> TestResult {
+    MINI_TEST!("Surface Point Beside A Closed Seam", {
+        use crate::Closest;
+        use crate::Primitives;
+
+        let cylinder = Primitives::cylinder_surface(0.0, 0.0, -1.0, 0.5, 2.0);
+
+        for i in 0..=256 {
+            let point = cylinder.point_at(4.0 * i as f64 / 256.0, 0.5).unwrap();
+
+            MINI_CHECK!(Closest::surface_point(&cylinder, &point, 0.0, 0.0, 0.0, 0.0).2 < 1e-9);
+        }
+    })
+}
+
 pub fn run_closest_surface_curve() -> TestResult {
     MINI_TEST!("Surface Curve", {
         use crate::nurbsknot::CurveInterpStyle;
@@ -439,6 +454,11 @@ REGISTER_MINI_TEST!(
     "Closest",
     "Surface Point",
     crate::closest_test::run_closest_surface_point
+);
+REGISTER_MINI_TEST!(
+    "Closest",
+    "Surface Point Beside A Closed Seam",
+    crate::closest_test::run_closest_surface_point_beside_a_closed_seam
 );
 REGISTER_MINI_TEST!(
     "Closest",

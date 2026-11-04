@@ -1212,9 +1212,41 @@ impl Closest {
         v1 = v1.min(domain_v1);
 
         let seed = surface_seed(surface, test_point, u0, u1, v0, v1);
-        let (u, v) = surface_newton(surface, test_point, u0, u1, v0, v1, seed);
+        let (mut u, mut v) = surface_newton(surface, test_point, u0, u1, v0, v1, seed);
+        let mut gap = surface_at(surface, u, v).distance(test_point, None);
 
-        (u, v, surface_at(surface, u, v).distance(test_point, None))
+        // On a closed surface a seed on the seam stands for both ends of the domain, and Newton from the wrong end stays clamped there.
+        let on_seam = |dir: usize, at: f64, low: f64, high: f64| {
+            let domain = surface_domain(surface, dir);
+
+            low == domain.0
+                && high == domain.1
+                && (at - low).min(high - at) <= (high - low) * 1e-9
+                && surface.is_closed(dir)
+        };
+        let seam_u = on_seam(0, seed.0, u0, u1);
+        let seam_v = on_seam(1, seed.1, v0, v1);
+
+        for ends in 1..4 {
+            if ((ends & 1) != 0 && !seam_u) || ((ends & 2) != 0 && !seam_v) {
+                continue;
+            }
+
+            let other = (
+                if (ends & 1) != 0 { u0 + u1 - seed.0 } else { seed.0 },
+                if (ends & 2) != 0 { v0 + v1 - seed.1 } else { seed.1 },
+            );
+            let (other_u, other_v) = surface_newton(surface, test_point, u0, u1, v0, v1, other);
+            let other_gap = surface_at(surface, other_u, other_v).distance(test_point, None);
+
+            if other_gap < gap {
+                u = other_u;
+                v = other_v;
+                gap = other_gap;
+            }
+        }
+
+        (u, v, gap)
     }
 
     /// Seam-split uv pcurves of a curve lying on the surface, empty when it does not.

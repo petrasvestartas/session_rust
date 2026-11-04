@@ -2784,6 +2784,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Closest",
+            name: "Surface Point Beside A Closed Seam",
+            func: run_closest_surface_point_beside_a_closed_seam,
+        },
+        RegisteredTest {
+            group: "Closest",
             name: "Surface Curve",
             func: run_closest_surface_curve,
         },
