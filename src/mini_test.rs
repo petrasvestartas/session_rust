@@ -3386,6 +3386,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Intersection",
+            name: "Line Line Classified Skewed",
+            func: run_intersection_line_line_classified_skewed,
+        },
+        RegisteredTest {
+            group: "Intersection",
             name: "Plane Plane Optional",
             func: run_intersection_plane_plane_optional,
         },

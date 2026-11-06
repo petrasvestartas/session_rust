@@ -10971,12 +10971,10 @@ pub fn line_line_classified(
         return true;
     }
 
-    let (t0_v, t1_v) = match line_line_parameters(s0, s1, 0.0, false, true) {
+    let (t0c, t1c) = match line_line_parameters(s0, s1, 0.0, true, true) {
         Some(t) => t,
         None => return false,
     };
-    let t0c = t0_v.clamp(0.0, 1.0);
-    let t1c = t1_v.clamp(0.0, 1.0);
     *p0 = s0.point_at(t0c);
     *p1 = s1.point_at(t1c);
     let tt0 = (t0c + cur_seg_0 as f64) / n_segs_0 as f64;

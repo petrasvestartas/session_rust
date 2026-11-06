@@ -2757,6 +2757,49 @@ pub fn run_intersection_line_line_classified() -> TestResult {
     })
 }
 
+pub fn run_intersection_line_line_classified_skewed() -> TestResult {
+    MINI_TEST!("Line Line Classified Skewed", {
+        use crate::intersection;
+        use crate::Line;
+        use crate::Point;
+        use crate::Vector;
+
+        let beam0 = Line::new(0.0, 0.0, 0.0, 3000.0, 0.0, 0.0);
+        let beam1 = Line::new(3200.0, -1500.0, 100.0, 3600.0, 1500.0, 100.0);
+        let mut p0 = Point::new(0.0, 0.0, 0.0);
+        let mut p1 = Point::new(0.0, 0.0, 0.0);
+        let mut v0 = Vector::new(0.0, 0.0, 0.0);
+        let mut v1 = Vector::new(0.0, 0.0, 0.0);
+        let mut normal = Vector::new(0.0, 0.0, 0.0);
+        let mut type0 = false;
+        let mut type1 = false;
+        let mut is_parallel = false;
+        let ok = intersection::line_line_classified(
+            &beam0,
+            &beam1,
+            1,
+            1,
+            0,
+            0,
+            0.5,
+            &mut p0,
+            &mut p1,
+            &mut v0,
+            &mut v1,
+            &mut normal,
+            &mut type0,
+            &mut type1,
+            &mut is_parallel,
+        );
+
+        MINI_CHECK!(ok);
+        MINI_CHECK!(!is_parallel);
+        MINI_CHECK!((p0[0] - 3000.0).abs() < 1e-6);
+        MINI_CHECK!((p1[1] - (-1500.0 + 3000.0 * 221.0 / 458.0)).abs() < 1e-6);
+        MINI_CHECK!((p0.distance(&p1, None) - 408.9074).abs() < 1e-3);
+    })
+}
+
 pub fn run_intersection_plane_plane_optional() -> TestResult {
     MINI_TEST!("Plane Plane Optional", {
         use crate::intersection;
@@ -3208,6 +3251,11 @@ REGISTER_MINI_TEST!(
     "Intersection",
     "Line Line Classified",
     crate::intersection_test::run_intersection_line_line_classified
+);
+REGISTER_MINI_TEST!(
+    "Intersection",
+    "Line Line Classified Skewed",
+    crate::intersection_test::run_intersection_line_line_classified_skewed
 );
 REGISTER_MINI_TEST!(
     "Intersection",
