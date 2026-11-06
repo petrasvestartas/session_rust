@@ -3026,6 +3026,26 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Intersection",
+            name: "Line Line Parameters Skewed",
+            func: run_intersection_line_line_parameters_skewed,
+        },
+        RegisteredTest {
+            group: "Intersection",
+            name: "Line Line Parameters Parallel",
+            func: run_intersection_line_line_parameters_parallel,
+        },
+        RegisteredTest {
+            group: "Intersection",
+            name: "Line Line Parameters Collinear",
+            func: run_intersection_line_line_parameters_collinear,
+        },
+        RegisteredTest {
+            group: "Intersection",
+            name: "Line Line Parameters Degenerate",
+            func: run_intersection_line_line_parameters_degenerate,
+        },
+        RegisteredTest {
+            group: "Intersection",
             name: "Plane Plane",
             func: run_intersection_plane_plane,
         },

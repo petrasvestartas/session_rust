@@ -274,6 +274,97 @@ pub fn run_intersection_line_line_parameters_infinite() -> TestResult {
     })
 }
 
+pub fn run_intersection_line_line_parameters_skewed() -> TestResult {
+    MINI_TEST!("Line Line Parameters Skewed", {
+        use crate::intersection;
+        use crate::Line;
+
+        let beam0 = Line::new(0.0, 0.0, 0.0, 3000.0, 0.0, 0.0);
+        let beam1 = Line::new(3200.0, -1500.0, 100.0, 3600.0, 1500.0, 100.0);
+
+        let result = intersection::line_line_parameters(&beam0, &beam1, 0.0, true, true);
+        let (t0, t1) = result.unwrap();
+        let gap = beam0.point_at(t0).distance(&beam1.point_at(t1), None);
+        let clamped_gap = beam0.point_at(1.0).distance(&beam1.point_at(0.5), None);
+        let shift = (0.5 - t1) * beam1.length();
+
+        MINI_CHECK!(result.is_some());
+        MINI_CHECK!(TOLERANCE.is_close(t0, 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(t1, 221.0 / 458.0));
+        MINI_CHECK!((gap - 408.9074).abs() < 1e-3);
+        MINI_CHECK!((clamped_gap - gap - 3.4032).abs() < 1e-3);
+        MINI_CHECK!((shift - 52.8655).abs() < 1e-3);
+    })
+}
+
+pub fn run_intersection_line_line_parameters_parallel() -> TestResult {
+    MINI_TEST!("Line Line Parameters Parallel", {
+        use crate::intersection;
+        use crate::Line;
+
+        let line0 = Line::new(0.0, 0.0, 0.0, 10.0, 0.0, 0.0);
+        let line1 = Line::new(3.0, 1.0, 0.0, 8.0, 1.0, 0.0);
+
+        let rejected =
+            intersection::line_line_parameters(&line0, &line1, 0.0, true, false).is_none();
+
+        let result = intersection::line_line_parameters(&line0, &line1, 0.0, true, true);
+        let (t0, t1) = result.unwrap();
+        let gap = line0.point_at(t0).distance(&line1.point_at(t1), None);
+
+        MINI_CHECK!(rejected);
+        MINI_CHECK!(result.is_some());
+        MINI_CHECK!(TOLERANCE.is_close(t0, 0.3));
+        MINI_CHECK!(TOLERANCE.is_close(t1, 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(gap, 1.0));
+    })
+}
+
+pub fn run_intersection_line_line_parameters_collinear() -> TestResult {
+    MINI_TEST!("Line Line Parameters Collinear", {
+        use crate::intersection;
+        use crate::Line;
+
+        let line0 = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+        let line1 = Line::new(2.0, 0.0, 0.0, 3.0, 0.0, 0.0);
+
+        let result = intersection::line_line_parameters(&line0, &line1, 0.0, true, true);
+        let (t0, t1) = result.unwrap();
+        let gap = line0.point_at(t0).distance(&line1.point_at(t1), None);
+
+        MINI_CHECK!(result.is_some());
+        MINI_CHECK!(TOLERANCE.is_close(t0, 1.0));
+        MINI_CHECK!(TOLERANCE.is_close(t1, 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(gap, 1.0));
+    })
+}
+
+pub fn run_intersection_line_line_parameters_degenerate() -> TestResult {
+    MINI_TEST!("Line Line Parameters Degenerate", {
+        use crate::intersection;
+        use crate::Line;
+
+        let point0 = Line::new(0.5, 2.0, 0.0, 0.5, 2.0, 0.0);
+        let point1 = Line::new(2.0, 1.0, 1.0, 2.0, 1.0, 1.0);
+        let line1 = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+
+        let result = intersection::line_line_parameters(&point0, &line1, 0.0, true, true);
+        let (t0, t1) = result.unwrap();
+        let gap = point0.point_at(t0).distance(&line1.point_at(t1), None);
+
+        let points = intersection::line_line_parameters(&point0, &point1, 0.0, true, true);
+        let (u0, u1) = points.unwrap();
+        let points_gap = point0.point_at(u0).distance(&point1.point_at(u1), None);
+
+        MINI_CHECK!(result.is_some());
+        MINI_CHECK!(TOLERANCE.is_close(t0, 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(t1, 0.5));
+        MINI_CHECK!(TOLERANCE.is_close(gap, 2.0));
+        MINI_CHECK!(points.is_some());
+        MINI_CHECK!(TOLERANCE.is_close(points_gap, 4.25f64.sqrt()));
+    })
+}
+
 pub fn run_intersection_plane_plane() -> TestResult {
     MINI_TEST!("Plane Plane", {
         use crate::intersection;
@@ -2757,6 +2848,26 @@ REGISTER_MINI_TEST!(
     "Intersection",
     "Line Line Parameters Infinite",
     crate::intersection_test::run_intersection_line_line_parameters_infinite
+);
+REGISTER_MINI_TEST!(
+    "Intersection",
+    "Line Line Parameters Skewed",
+    crate::intersection_test::run_intersection_line_line_parameters_skewed
+);
+REGISTER_MINI_TEST!(
+    "Intersection",
+    "Line Line Parameters Parallel",
+    crate::intersection_test::run_intersection_line_line_parameters_parallel
+);
+REGISTER_MINI_TEST!(
+    "Intersection",
+    "Line Line Parameters Collinear",
+    crate::intersection_test::run_intersection_line_line_parameters_collinear
+);
+REGISTER_MINI_TEST!(
+    "Intersection",
+    "Line Line Parameters Degenerate",
+    crate::intersection_test::run_intersection_line_line_parameters_degenerate
 );
 REGISTER_MINI_TEST!(
     "Intersection",

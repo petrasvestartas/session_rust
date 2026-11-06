@@ -267,7 +267,7 @@ fn clamp_unit(t: f64) -> f64 {
     t
 }
 
-/// Parameters of closest approach of two lines, clamped to the segments when requested.
+/// Parameters of closest approach of two lines, or of the two segments when intersect_segments is set.
 pub fn line_line_parameters(
     line0: &Line,
     line1: &Line,
@@ -291,7 +291,7 @@ pub fn line_line_parameters(
 
     let det = aa * bb - ab * ab;
     let zero_tol = aa.max(bb) * f64::EPSILON;
-    let parallel = det.abs() < zero_tol;
+    let parallel = det.abs() <= zero_tol;
 
     if parallel && !near_parallel_as_closest {
         return None;
@@ -299,7 +299,7 @@ pub fn line_line_parameters(
 
     let (mut t0, mut t1) = if parallel {
         let t0 = if aa > 0.0 { ac / aa } else { 0.0 };
-        let t1 = if bb > 0.0 { (bc + t0 * ab) / bb } else { 0.0 };
+        let t1 = if bb > 0.0 { (t0 * ab - bc) / bb } else { 0.0 };
 
         (t0, t1)
     } else {
@@ -308,9 +308,20 @@ pub fn line_line_parameters(
         ((bb * ac - ab * bc) * inv_det, (ab * ac - aa * bc) * inv_det)
     };
 
+    // segments: clamp t0, solve t1 for it, and if t1 leaves its segment clamp it and solve t0 again (Ericson, Real-Time
+    // Collision Detection 5.1.9, as in Coal's capsule_capsule.cpp, BSD-2)
     if intersect_segments {
         t0 = clamp_unit(t0);
-        t1 = clamp_unit(t1);
+        t1 = if bb > 0.0 { (t0 * ab - bc) / bb } else { 0.0 };
+
+        if t1 < 0.0 || t1 > 1.0 {
+            t1 = clamp_unit(t1);
+            t0 = if aa > 0.0 {
+                clamp_unit((t1 * ab + ac) / aa)
+            } else {
+                0.0
+            };
+        }
     }
 
     if tolerance > 0.0 && line0.point_at(t0).distance(&line1.point_at(t1), None) > tolerance {
