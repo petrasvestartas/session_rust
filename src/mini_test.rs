@@ -664,6 +664,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Color",
+            name: "Lerp",
+            func: run_color_lerp,
+        },
+        RegisteredTest {
+            group: "Color",
             name: "Presets",
             func: run_color_presets,
         },
@@ -854,6 +859,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Vector",
             name: "Average",
             func: run_vector_average,
+        },
+        RegisteredTest {
+            group: "Vector",
+            name: "Lerp",
+            func: run_vector_lerp,
         },
         RegisteredTest {
             group: "Vector",
@@ -1086,6 +1096,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Line",
             name: "Point At",
             func: run_line_point_at,
+        },
+        RegisteredTest {
+            group: "Line",
+            name: "Lerp",
+            func: run_line_lerp,
         },
         RegisteredTest {
             group: "Line",
@@ -1327,6 +1342,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Polyline",
             name: "Tween",
             func: run_polyline_tween,
+        },
+        RegisteredTest {
+            group: "Polyline",
+            name: "Morph",
+            func: run_polyline_morph,
         },
         RegisteredTest {
             group: "Polyline",
@@ -1890,6 +1910,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Xform",
             name: "Uniform Scale",
             func: run_xform_uniform_scale,
+        },
+        RegisteredTest {
+            group: "Xform",
+            name: "Interpolate",
+            func: run_xform_interpolate,
         },
         RegisteredTest {
             group: "Xform",

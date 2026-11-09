@@ -797,6 +797,44 @@ pub fn run_polyline_tween() -> TestResult {
     })
 }
 
+pub fn run_polyline_morph() -> TestResult {
+    MINI_TEST!("Morph", {
+        use crate::Point;
+        use crate::Polyline;
+
+        let pl = Polyline::new(vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(2.0, 0.0, 0.0),
+            Point::new(2.0, 2.0, 0.0),
+        ]);
+        let line = Polyline::new(vec![
+            Point::new(0.0, 0.0, 1.0),
+            Point::new(1.0, 0.0, 1.0),
+            Point::new(2.0, 0.0, 1.0),
+            Point::new(3.0, 0.0, 1.0),
+            Point::new(4.0, 0.0, 1.0),
+        ]);
+        let resampled = pl.resampled(5);
+        let morphed = Polyline::morph(&pl, &line, 0.5);
+
+        MINI_CHECK!(resampled.point_count() == 5);
+        MINI_CHECK!(
+            TOLERANCE.is_point_close(&resampled.get_point(1).unwrap(), &Point::new(1.0, 0.0, 0.0))
+        );
+        MINI_CHECK!(
+            TOLERANCE.is_point_close(&resampled.get_point(2).unwrap(), &Point::new(2.0, 0.0, 0.0))
+        );
+        MINI_CHECK!(
+            TOLERANCE.is_point_close(&resampled.get_point(3).unwrap(), &Point::new(2.0, 1.0, 0.0))
+        );
+        MINI_CHECK!(morphed.point_count() == 5);
+        MINI_CHECK!(
+            TOLERANCE.is_point_close(&morphed.get_point(2).unwrap(), &Point::new(2.0, 0.0, 0.5))
+        );
+        MINI_CHECK!(Polyline::morph(&pl, &line, 0.0) == resampled);
+    })
+}
+
 pub fn run_polyline_average_plane() -> TestResult {
     MINI_TEST!("Average Plane", {
         use crate::Point;
@@ -1441,6 +1479,11 @@ REGISTER_MINI_TEST!(
     "Polyline",
     "Tween",
     crate::polyline_test::run_polyline_tween
+);
+REGISTER_MINI_TEST!(
+    "Polyline",
+    "Morph",
+    crate::polyline_test::run_polyline_morph
 );
 REGISTER_MINI_TEST!(
     "Polyline",

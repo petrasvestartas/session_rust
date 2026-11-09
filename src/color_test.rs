@@ -115,6 +115,21 @@ pub fn run_color_conversion() -> TestResult {
     })
 }
 
+pub fn run_color_lerp() -> TestResult {
+    MINI_TEST!("Lerp", {
+        use crate::Color;
+
+        let a = Color::new(0.0, 0.0, 0.0, 1.0);
+        let b = Color::new(1.0, 0.5, 0.0, 0.0);
+        let c = Color::lerp(&a, &b, 0.5);
+
+        MINI_CHECK!(TOLERANCE.is_close(c.r as f64, 0.5));
+        MINI_CHECK!(TOLERANCE.is_close(c.g as f64, 0.25));
+        MINI_CHECK!(TOLERANCE.is_close(c.b as f64, 0.0));
+        MINI_CHECK!(TOLERANCE.is_close(c.a as f64, 0.5));
+    })
+}
+
 pub fn run_color_presets() -> TestResult {
     MINI_TEST!("Presets", {
         use crate::Color;
@@ -222,6 +237,7 @@ REGISTER_MINI_TEST!(
     "Conversion",
     crate::color_test::run_color_conversion
 );
+REGISTER_MINI_TEST!("Color", "Lerp", crate::color_test::run_color_lerp);
 REGISTER_MINI_TEST!("Color", "Presets", crate::color_test::run_color_presets);
 REGISTER_MINI_TEST!(
     "Color",

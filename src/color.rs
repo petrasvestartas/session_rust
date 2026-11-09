@@ -262,6 +262,17 @@ impl Color {
         Self::new(arr[0], arr[1], arr[2], arr[3])
     }
 
+    /// Return the color at parameter t in [0, 1] between a and b, named after a.
+    pub fn lerp(a: &Color, b: &Color, t: f64) -> Color {
+        Color::with_name(
+            (a.r as f64 + (b.r as f64 - a.r as f64) * t) as f32,
+            (a.g as f64 + (b.g as f64 - a.g as f64) * t) as f32,
+            (a.b as f64 + (b.b as f64 - a.b as f64) * t) as f32,
+            (a.a as f64 + (b.a as f64 - a.a as f64) * t) as f32,
+            &a.name,
+        )
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // JSON
     // ═══════════════════════════════════════════════════════════════════════════

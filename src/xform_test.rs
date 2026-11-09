@@ -745,6 +745,32 @@ pub fn run_xform_uniform_scale() -> TestResult {
     })
 }
 
+pub fn run_xform_interpolate() -> TestResult {
+    MINI_TEST!("Interpolate", {
+        use crate::Xform;
+
+        let a = Xform::identity();
+        let b = &Xform::translation(2.0, 4.0, 6.0) * &Xform::rotation_z(PI / 2.0, false);
+        let half = Xform::interpolate(&a, &b, 0.5);
+        let scaled = Xform::interpolate(&a, &Xform::scale_xyz(3.0, 3.0, 3.0), 0.5);
+        let c = (PI / 4.0).cos();
+
+        MINI_CHECK!(
+            TOLERANCE.is_close(half.m[12], 1.0)
+                && TOLERANCE.is_close(half.m[13], 2.0)
+                && TOLERANCE.is_close(half.m[14], 3.0)
+        );
+        MINI_CHECK!(
+            TOLERANCE.is_close(half.m[0], c)
+                && TOLERANCE.is_close(half.m[1], c)
+                && TOLERANCE.is_close(half.m[2], 0.0)
+        );
+        MINI_CHECK!(Xform::interpolate(&a, &b, 0.0) == a);
+        MINI_CHECK!(Xform::interpolate(&a, &b, 1.0) == b);
+        MINI_CHECK!(TOLERANCE.is_close(scaled.m[0], 2.0));
+    })
+}
+
 pub fn run_xform_eye() -> TestResult {
     MINI_TEST!("Eye", {
         use crate::Point;
@@ -962,6 +988,11 @@ REGISTER_MINI_TEST!(
     "Xform",
     "Uniform Scale",
     crate::xform_test::run_xform_uniform_scale
+);
+REGISTER_MINI_TEST!(
+    "Xform",
+    "Interpolate",
+    crate::xform_test::run_xform_interpolate
 );
 REGISTER_MINI_TEST!("Xform", "Eye", crate::xform_test::run_xform_eye);
 REGISTER_MINI_TEST!(

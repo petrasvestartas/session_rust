@@ -1718,6 +1718,41 @@ impl Polyline {
         result
     }
 
+    /// Return a copy with count points at equal arc-length spacing, first and last kept.
+    pub fn resampled(&self, count: usize) -> Polyline {
+        if count < 2 || self.point_count() < 2 {
+            return self.duplicate();
+        }
+
+        let total = self.length();
+        let mut result = self.duplicate();
+        result.coords.clear();
+        result.add_point(self.point(0));
+
+        for i in 1..count - 1 {
+            result.add_point(self.point_at_length(total * i as f64 / (count - 1) as f64));
+        }
+
+        result.add_point(self.point(self.point_count() - 1));
+
+        result
+    }
+
+    /// Return the pointwise blend at t, the polyline with fewer points resampled to the larger count.
+    pub fn morph(a: &Polyline, b: &Polyline, t: f64) -> Polyline {
+        let count = a.point_count().max(b.point_count());
+        let pa = a.resampled(count);
+        let pb = b.resampled(count);
+        let mut result = a.duplicate();
+        result.coords.clear();
+
+        for i in 0..pa.point_count().min(pb.point_count()) {
+            result.add_point(Point::lerp(&pa.point(i), &pb.point(i), t));
+        }
+
+        result
+    }
+
     /// Return steps points between from and to; kind 0 none, 1 both, 2 start endpoint.
     pub fn interpolate_points(from: &Point, to: &Point, steps: usize, kind: usize) -> Vec<Point> {
         Point::interpolate(from, to, steps, kind)

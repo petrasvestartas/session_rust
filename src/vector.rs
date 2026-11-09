@@ -710,6 +710,11 @@ impl Vector {
         Self::sum_of_vectors(vectors) / vectors.len() as f64
     }
 
+    /// Return the vector at parameter t in [0, 1] between a and b.
+    pub fn lerp(a: &Vector, b: &Vector, t: f64) -> Vector {
+        a + (b - a) * t
+    }
+
     /// Scale in place by SCALE.
     pub fn scale_up(&mut self) {
         *self *= SCALE;

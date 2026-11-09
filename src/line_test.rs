@@ -269,6 +269,22 @@ pub fn run_line_point_at() -> TestResult {
     })
 }
 
+pub fn run_line_lerp() -> TestResult {
+    MINI_TEST!("Lerp", {
+        use crate::Line;
+        use crate::Point;
+
+        let mut a = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+        a.width = 3.0;
+        let b = Line::new(0.0, 2.0, 0.0, 1.0, 4.0, 0.0);
+        let half = Line::lerp(&a, &b, 0.5);
+
+        MINI_CHECK!(TOLERANCE.is_point_close(&half.start(), &Point::new(0.0, 1.0, 0.0)));
+        MINI_CHECK!(TOLERANCE.is_point_close(&half.end(), &Point::new(1.0, 2.0, 0.0)));
+        MINI_CHECK!(half.width == 3.0);
+    })
+}
+
 pub fn run_line_closest_point() -> TestResult {
     MINI_TEST!("Closest Point", {
         use crate::Line;
@@ -560,6 +576,7 @@ REGISTER_MINI_TEST!(
     crate::line_test::run_line_to_direction
 );
 REGISTER_MINI_TEST!("Line", "Point At", crate::line_test::run_line_point_at);
+REGISTER_MINI_TEST!("Line", "Lerp", crate::line_test::run_line_lerp);
 REGISTER_MINI_TEST!(
     "Line",
     "Closest Point",

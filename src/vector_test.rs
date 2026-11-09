@@ -385,6 +385,22 @@ pub fn run_vector_average() -> TestResult {
     })
 }
 
+pub fn run_vector_lerp() -> TestResult {
+    MINI_TEST!("Lerp", {
+        use crate::Vector;
+
+        let a = Vector::new(0.0, 0.0, 0.0);
+        let b = Vector::new(2.0, 4.0, 6.0);
+        let half = Vector::lerp(&a, &b, 0.5);
+        let start = Vector::lerp(&a, &b, 0.0);
+        let end = Vector::lerp(&a, &b, 1.0);
+
+        MINI_CHECK!(half[0] == 1.0 && half[1] == 2.0 && half[2] == 3.0);
+        MINI_CHECK!(start == a);
+        MINI_CHECK!(end == b);
+    })
+}
+
 pub fn run_vector_is_zero() -> TestResult {
     MINI_TEST!("Is Zero", {
         use crate::Vector;
@@ -601,6 +617,7 @@ REGISTER_MINI_TEST!(
     crate::vector_test::run_vector_sum_of_vectors
 );
 REGISTER_MINI_TEST!("Vector", "Average", crate::vector_test::run_vector_average);
+REGISTER_MINI_TEST!("Vector", "Lerp", crate::vector_test::run_vector_lerp);
 REGISTER_MINI_TEST!("Vector", "Is Zero", crate::vector_test::run_vector_is_zero);
 REGISTER_MINI_TEST!("Vector", "Scale", crate::vector_test::run_vector_scale);
 REGISTER_MINI_TEST!("Vector", "Reflect", crate::vector_test::run_vector_reflect);

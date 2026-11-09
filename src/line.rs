@@ -696,6 +696,21 @@ impl Line {
         (output_start, output_end)
     }
 
+    /// Return a copy of a with each end at parameter t in [0, 1] between the ends of a and b.
+    pub fn lerp(a: &Line, b: &Line, t: f64) -> Line {
+        let s = Point::lerp(&a.start(), &b.start(), t);
+        let e = Point::lerp(&a.end(), &b.end(), t);
+        let mut result = a.duplicate();
+        result._x0 = s[0];
+        result._y0 = s[1];
+        result._z0 = s[2];
+        result._x1 = e[0];
+        result._y1 = e[1];
+        result._z1 = e[2];
+
+        result
+    }
+
     /// Compute the extreme sub-segment of line spanned by the projected points; None when empty.
     pub fn from_projected_points(line: &Line, points: &[Point]) -> Option<Line> {
         let (output_start, output_end) =

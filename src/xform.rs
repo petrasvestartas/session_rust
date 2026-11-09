@@ -816,6 +816,121 @@ impl Xform {
         (self.m[0] * self.m[0] + self.m[1] * self.m[1] + self.m[2] * self.m[2]).sqrt()
     }
 
+    /// Return the blend at t in [0, 1]: translation and axis scales lerped, rotation slerped.
+    pub fn interpolate(a: &Xform, b: &Xform, t: f64) -> Xform {
+        let xforms = [a, b];
+        let mut q = [[0.0; 4]; 2];
+        let mut s = [[0.0; 3]; 2];
+
+        for k in 0..2 {
+            let n = &xforms[k].m;
+            let mut r = [[0.0; 3]; 3];
+
+            for c in 0..3 {
+                s[k][c] = (n[c * 4] * n[c * 4]
+                    + n[c * 4 + 1] * n[c * 4 + 1]
+                    + n[c * 4 + 2] * n[c * 4 + 2])
+                    .sqrt();
+
+                for i in 0..3 {
+                    r[i][c] = if s[k][c] > 0.0 {
+                        n[c * 4 + i] / s[k][c]
+                    } else if i == c {
+                        1.0
+                    } else {
+                        0.0
+                    };
+                }
+            }
+
+            let trace = r[0][0] + r[1][1] + r[2][2];
+
+            if trace > 0.0 {
+                let d = 2.0 * (1.0 + trace).sqrt();
+                q[k] = [
+                    0.25 * d,
+                    (r[2][1] - r[1][2]) / d,
+                    (r[0][2] - r[2][0]) / d,
+                    (r[1][0] - r[0][1]) / d,
+                ];
+            } else if r[0][0] > r[1][1] && r[0][0] > r[2][2] {
+                let d = 2.0 * (1.0 + r[0][0] - r[1][1] - r[2][2]).sqrt();
+                q[k] = [
+                    (r[2][1] - r[1][2]) / d,
+                    0.25 * d,
+                    (r[0][1] + r[1][0]) / d,
+                    (r[0][2] + r[2][0]) / d,
+                ];
+            } else if r[1][1] > r[2][2] {
+                let d = 2.0 * (1.0 + r[1][1] - r[0][0] - r[2][2]).sqrt();
+                q[k] = [
+                    (r[0][2] - r[2][0]) / d,
+                    (r[0][1] + r[1][0]) / d,
+                    0.25 * d,
+                    (r[1][2] + r[2][1]) / d,
+                ];
+            } else {
+                let d = 2.0 * (1.0 + r[2][2] - r[0][0] - r[1][1]).sqrt();
+                q[k] = [
+                    (r[1][0] - r[0][1]) / d,
+                    (r[0][2] + r[2][0]) / d,
+                    (r[1][2] + r[2][1]) / d,
+                    0.25 * d,
+                ];
+            }
+        }
+
+        let mut dot = q[0][0] * q[1][0] + q[0][1] * q[1][1] + q[0][2] * q[1][2] + q[0][3] * q[1][3];
+
+        if dot < 0.0 {
+            for i in 0..4 {
+                q[1][i] = -q[1][i];
+            }
+            dot = -dot;
+        }
+
+        let mut w0 = 1.0 - t;
+        let mut w1 = t;
+
+        if dot <= 0.9995 {
+            let theta = dot.acos();
+            w0 = ((1.0 - t) * theta).sin() / theta.sin();
+            w1 = (t * theta).sin() / theta.sin();
+        }
+
+        let mut p = [0.0; 4];
+
+        for i in 0..4 {
+            p[i] = w0 * q[0][i] + w1 * q[1][i];
+        }
+
+        let len = (p[0] * p[0] + p[1] * p[1] + p[2] * p[2] + p[3] * p[3]).sqrt();
+        let w = p[0] / len;
+        let x = p[1] / len;
+        let y = p[2] / len;
+        let z = p[3] / len;
+        let sx = s[0][0] + (s[1][0] - s[0][0]) * t;
+        let sy = s[0][1] + (s[1][1] - s[0][1]) * t;
+        let sz = s[0][2] + (s[1][2] - s[0][2]) * t;
+
+        let mut result = Xform::new();
+        result.m[0] = (1.0 - 2.0 * (y * y + z * z)) * sx;
+        result.m[1] = 2.0 * (x * y + w * z) * sx;
+        result.m[2] = 2.0 * (x * z - w * y) * sx;
+        result.m[4] = 2.0 * (x * y - w * z) * sy;
+        result.m[5] = (1.0 - 2.0 * (x * x + z * z)) * sy;
+        result.m[6] = 2.0 * (y * z + w * x) * sy;
+        result.m[8] = 2.0 * (x * z + w * y) * sz;
+        result.m[9] = 2.0 * (y * z - w * x) * sz;
+        result.m[10] = (1.0 - 2.0 * (x * x + y * y)) * sz;
+
+        for i in 12..15 {
+            result.m[i] = a.m[i] + (b.m[i] - a.m[i]) * t;
+        }
+
+        result
+    }
+
     /// Return the eye of a view-projection: where clip x, y and w vanish at once; orthographic has none, so the view direction pushed far back.
     pub fn eye(&self) -> Point {
         let rows = [
