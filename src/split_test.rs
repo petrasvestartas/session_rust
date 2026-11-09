@@ -1,7 +1,7 @@
-use crate::mini_test::TestResult;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
 
 /// Point at fractions x and y along the first two control edges of a surface.
 fn mapped(surface: &crate::NurbsSurface, x: f64, y: f64) -> crate::Point {
@@ -11,10 +11,10 @@ fn mapped(surface: &crate::NurbsSurface, x: f64, y: f64) -> crate::Point {
 
 pub fn run_split_curve_by_curves() -> TestResult {
     MINI_TEST!("Split Curve By Curves", {
-        use crate::split::split_curve_by_curves;
         use crate::NurbsCurve;
         use crate::Point;
         use crate::Primitives;
+        use crate::split::split_curve_by_curves;
 
         let curve = NurbsCurve::create(
             false,
@@ -122,11 +122,11 @@ pub fn run_split_curve_by_curves() -> TestResult {
 
 pub fn run_split_brep_face_by_curves() -> TestResult {
     MINI_TEST!("Split BRep Face By Curves", {
-        use crate::split::split_brep_face_by_curves;
         use crate::BRep;
         use crate::NurbsCurve;
         use crate::Point;
         use crate::Primitives;
+        use crate::split::split_brep_face_by_curves;
 
         let box_ = BRep::create_box(10.0, 10.0, 10.0);
         let surface = box_.m_surfaces[0].clone();
@@ -276,10 +276,10 @@ pub fn run_split_brep_face_by_curves() -> TestResult {
 
 pub fn run_split_surface_by_curves() -> TestResult {
     MINI_TEST!("Split Surface By Curves", {
-        use crate::split::split_surface_by_curves;
         use crate::BRep;
         use crate::NurbsCurve;
         use crate::Point;
+        use crate::split::split_surface_by_curves;
 
         let surface = BRep::create_box(10.0, 10.0, 10.0).m_surfaces[0].clone();
         let cutter = NurbsCurve::create(
@@ -313,11 +313,11 @@ pub fn run_split_surface_by_curves() -> TestResult {
 
 pub fn run_split_line_by_curves() -> TestResult {
     MINI_TEST!("Split Line By Curves", {
-        use crate::split::split_line_by_curves;
         use crate::Arrowhead;
         use crate::Line;
         use crate::NurbsCurve;
         use crate::Point;
+        use crate::split::split_line_by_curves;
 
         let mut line = Line::from_points(&Point::new(-2.0, 0.0, 0.0), &Point::new(2.0, 0.0, 0.0));
         line.name = "retained".into();
@@ -357,11 +357,11 @@ pub fn run_split_line_by_curves() -> TestResult {
 
 pub fn run_split_polyline_by_curves() -> TestResult {
     MINI_TEST!("Split Polyline By Curves", {
-        use crate::split::split_polyline_by_curves;
         use crate::Arrowhead;
         use crate::NurbsCurve;
         use crate::Point;
         use crate::Polyline;
+        use crate::split::split_polyline_by_curves;
 
         let mut polyline = Polyline::new(vec![
             Point::new(-2.0, 0.0, 0.0),

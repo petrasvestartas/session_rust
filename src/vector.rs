@@ -1,11 +1,11 @@
-use crate::tolerance::Tolerance;
-use crate::tolerance::SCALE;
-use crate::tolerance::TOLERANCE;
-use crate::tolerance::TO_DEGREES;
-use crate::tolerance::TO_RADIANS;
 use crate::Point;
 use crate::Polyline;
 use crate::Xform;
+use crate::tolerance::SCALE;
+use crate::tolerance::TO_DEGREES;
+use crate::tolerance::TO_RADIANS;
+use crate::tolerance::TOLERANCE;
+use crate::tolerance::Tolerance;
 use serde::Deserialize;
 use serde::Serialize;
 use std::cell::Cell;

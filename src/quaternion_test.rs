@@ -1,9 +1,9 @@
-use crate::mini_test::TestResult;
-use crate::tolerance::PI;
-use crate::tolerance::TOLERANCE;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::PI;
+use crate::tolerance::TOLERANCE;
 
 pub fn run_quaternion_constructor() -> TestResult {
     MINI_TEST!("Constructor", {

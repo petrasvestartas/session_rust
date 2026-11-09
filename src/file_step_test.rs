@@ -1,9 +1,9 @@
 #![allow(clippy::needless_range_loop)]
-use crate::mini_test::TestResult;
-use crate::tolerance::PI;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::PI;
 
 /// Path of a file in the serialization folder, created when missing.
 fn serialization_path(name: &str) -> String {
@@ -15,9 +15,9 @@ fn serialization_path(name: &str) -> String {
 
 pub fn run_file_step_nurbscurve_round_trip() -> TestResult {
     MINI_TEST!("NurbsCurve Round Trip", {
-        use crate::file_step;
         use crate::NurbsCurve;
         use crate::Point;
+        use crate::file_step;
 
         let path = serialization_path("test_step_nurbscurve.step");
         let pts = vec![
@@ -77,8 +77,8 @@ pub fn run_file_step_nurbscurve_round_trip() -> TestResult {
 
 pub fn run_file_step_nurbscurve_rational_round_trip() -> TestResult {
     MINI_TEST!("NurbsCurve Rational Round Trip", {
-        use crate::file_step;
         use crate::NurbsCurve;
+        use crate::file_step;
 
         let path = serialization_path("test_step_nurbscurve_rat.step");
         let mut nc = NurbsCurve::new(3, true, 3, 3);
@@ -141,9 +141,9 @@ pub fn run_file_step_nurbscurve_rational_round_trip() -> TestResult {
 
 pub fn run_file_step_nurbssurface_round_trip() -> TestResult {
     MINI_TEST!("NurbsSurface Round Trip", {
-        use crate::file_step;
         use crate::NurbsSurface;
         use crate::Point;
+        use crate::file_step;
 
         let path = serialization_path("test_step_nurbssurface.step");
         let mut pts = Vec::new();
@@ -210,8 +210,8 @@ pub fn run_file_step_nurbssurface_round_trip() -> TestResult {
 
 pub fn run_file_step_nurbssurface_rational_round_trip() -> TestResult {
     MINI_TEST!("NurbsSurface Rational Round Trip", {
-        use crate::file_step;
         use crate::NurbsSurface;
+        use crate::file_step;
 
         let path = serialization_path("test_step_nurbssurface_rat.step");
         let mut srf = NurbsSurface::new(3, true, 3, 3, 3, 3);
@@ -271,11 +271,11 @@ pub fn run_file_step_nurbssurface_rational_round_trip() -> TestResult {
 
 pub fn run_file_step_nurbssurface_trimmed_round_trip() -> TestResult {
     MINI_TEST!("NurbsSurfaceTrimmed Round Trip", {
-        use crate::file_step;
         use crate::NurbsCurve;
         use crate::NurbsSurface;
         use crate::NurbsSurfaceTrimmed;
         use crate::Point;
+        use crate::file_step;
 
         let path = serialization_path("test_step_nurbssurface_trimmed.step");
         let mut pts = Vec::new();
@@ -435,8 +435,8 @@ pub fn run_file_step_brep_read_schoring() -> TestResult {
 
 pub fn run_file_step_brep_round_trip() -> TestResult {
     MINI_TEST!("BRep Round Trip", {
-        use crate::file_step;
         use crate::BRep;
+        use crate::file_step;
 
         let path = serialization_path("test_brep_roundtrip.step");
         let mut cyl = BRep::create_cylinder(1.0, 2.0);

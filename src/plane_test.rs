@@ -1,9 +1,9 @@
-use crate::mini_test::TestResult;
-use crate::tolerance::PI;
-use crate::tolerance::TOLERANCE;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::PI;
+use crate::tolerance::TOLERANCE;
 
 pub fn run_plane_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -84,8 +84,14 @@ pub fn run_plane_constructor() -> TestResult {
                 && TOLERANCE.is_close(ax1[1], 1.0)
                 && TOLERANCE.is_close(ax2[2], 1.0)
         );
-        MINI_CHECK!(plstr == "0.000000, 0.000000, 0.000000\n1.000000, 0.000000, 0.000000\n0.000000, 1.000000, 0.000000\n0.000000, 0.000000, 1.000000");
-        MINI_CHECK!(plrepr == "Plane(my_plane, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 1.000000, Color(blue, 0.0, 0.0, 1.0, 1.0))");
+        MINI_CHECK!(
+            plstr
+                == "0.000000, 0.000000, 0.000000\n1.000000, 0.000000, 0.000000\n0.000000, 1.000000, 0.000000\n0.000000, 0.000000, 1.000000"
+        );
+        MINI_CHECK!(
+            plrepr
+                == "Plane(my_plane, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 1.000000, Color(blue, 0.0, 0.0, 1.0, 1.0))"
+        );
         MINI_CHECK!(plcopy == pl && plcopy.guid() != pl.guid());
         MINI_CHECK!(xy != yz);
         MINI_CHECK!(

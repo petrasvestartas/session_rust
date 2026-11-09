@@ -1,3 +1,4 @@
+use crate::AABB;
 use crate::Line;
 use crate::Mesh;
 use crate::NurbsCurve;
@@ -8,7 +9,6 @@ use crate::PointCloud;
 use crate::Polyline;
 use crate::Vector;
 use crate::Xform;
-use crate::AABB;
 use serde::Deserialize;
 use serde::Serialize;
 use std::fmt;
@@ -33,9 +33,9 @@ pub struct OBB {
     pub half_size: Vector, // Half extent along each axis.
     pub name: String,      // Box name.
     #[serde(default = "crate::file_encoders::default_visible")]
-    pub is_visible: bool,  // Whether a viewer draws it.
+    pub is_visible: bool, // Whether a viewer draws it.
     #[serde(default)]
-    pub is_locked: bool,   // Whether a viewer keeps it from moving.
+    pub is_locked: bool, // Whether a viewer keeps it from moving.
 }
 
 impl OBB {

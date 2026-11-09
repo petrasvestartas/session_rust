@@ -5,12 +5,12 @@
     clippy::needless_range_loop,
     clippy::neg_multiply
 )]
-use crate::mini_test::TestResult;
-use crate::tolerance::PI;
-use crate::tolerance::TOLERANCE;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::PI;
+use crate::tolerance::TOLERANCE;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Mesh primitives
@@ -135,14 +135,25 @@ pub fn run_primitives_nurbscurve_arc() -> TestResult {
         let end = Point::new(2.0, 0.0, 0.0);
         let curve = Primitives::arc(&start, &mid, &end);
         let quarter_mid = Point::new(0.5f64.sqrt(), 0.5f64.sqrt(), 0.0);
-        let quarter = Primitives::arc(&Point::new(1.0, 0.0, 0.0), &quarter_mid, &Point::new(0.0, 1.0, 0.0));
+        let quarter = Primitives::arc(
+            &Point::new(1.0, 0.0, 0.0),
+            &quarter_mid,
+            &Point::new(0.0, 1.0, 0.0),
+        );
 
         MINI_CHECK!(curve.cv_count() == 3);
         MINI_CHECK!(curve.order() == 3);
         MINI_CHECK!(curve.is_rational());
         MINI_CHECK!(TOLERANCE.is_point_close(&curve.point_at(0.5), &mid));
         MINI_CHECK!(TOLERANCE.is_point_close(&quarter.point_at(0.5), &quarter_mid));
-        MINI_CHECK!((quarter.point_at(0.25).distance(&Point::new(0.0, 0.0, 0.0), None) - 1.0).abs() < 1e-9);
+        MINI_CHECK!(
+            (quarter
+                .point_at(0.25)
+                .distance(&Point::new(0.0, 0.0, 0.0), None)
+                - 1.0)
+                .abs()
+                < 1e-9
+        );
     })
 }
 
@@ -401,12 +412,12 @@ pub fn run_primitives_nurbssurface_quad_sphere() -> TestResult {
 // ═══════════════════════════════════════════════════════════════════════════
 pub fn run_primitives_nurbssurface_ruled_nearby_knots() -> TestResult {
     MINI_TEST!("Nurbssurface Ruled Nearby Knots", {
-        use crate::nurbsknot::CurveInterpStyle;
-        use crate::nurbsknot::CurveNurbsKnotStyle;
         use crate::NurbsCurve;
         use crate::Point;
         use crate::Primitives;
         use crate::Xform;
+        use crate::nurbsknot::CurveInterpStyle;
+        use crate::nurbsknot::CurveNurbsKnotStyle;
 
         let wave = vec![
             Point::new(0.0, 0.0, 0.0),
@@ -415,7 +426,11 @@ pub fn run_primitives_nurbssurface_ruled_nearby_knots() -> TestResult {
             Point::new(3.5, 0.0, 0.9),
             Point::new(5.0, 0.0, 0.0),
         ];
-        let mut crv_a = NurbsCurve::create_interpolated(&wave, CurveNurbsKnotStyle::Chord, CurveInterpStyle::Rhino);
+        let mut crv_a = NurbsCurve::create_interpolated(
+            &wave,
+            CurveNurbsKnotStyle::Chord,
+            CurveInterpStyle::Rhino,
+        );
         let mut crv_b = crv_a.duplicate();
         crv_a.set_domain(0.0, 1.0);
         crv_b.set_domain(0.0, 1.0);
@@ -431,8 +446,16 @@ pub fn run_primitives_nurbssurface_ruled_nearby_knots() -> TestResult {
 
         for k in 0..=10 {
             let u = k as f64 / 10.0;
-            apart = apart.max(srf.point_at(u, 0.0).unwrap_or_default().distance(&crv_a.point_at(u), None));
-            apart = apart.max(srf.point_at(u, 1.0).unwrap_or_default().distance(&crv_b.point_at(u), None));
+            apart = apart.max(
+                srf.point_at(u, 0.0)
+                    .unwrap_or_default()
+                    .distance(&crv_a.point_at(u), None),
+            );
+            apart = apart.max(
+                srf.point_at(u, 1.0)
+                    .unwrap_or_default()
+                    .distance(&crv_b.point_at(u), None),
+            );
         }
 
         MINI_CHECK!(srf.is_valid());
@@ -2100,10 +2123,10 @@ pub fn run_primitives_mesh_cone_subdivisions() -> TestResult {
 
 pub fn run_primitives_nurbscurve_interpolated() -> TestResult {
     MINI_TEST!("Nurbscurve Interpolated", {
-        use crate::nurbsknot::CurveInterpStyle;
-        use crate::nurbsknot::CurveNurbsKnotStyle;
         use crate::Point;
         use crate::Primitives;
+        use crate::nurbsknot::CurveInterpStyle;
+        use crate::nurbsknot::CurveNurbsKnotStyle;
 
         let points = vec![
             Point::new(14.0, 9.0, 0.0),

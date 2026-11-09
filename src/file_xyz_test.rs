@@ -1,8 +1,8 @@
-use crate::mini_test::TestResult;
-use crate::tolerance::TOLERANCE;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::TOLERANCE;
 
 pub fn run_file_xyz_read_bunny() -> TestResult {
     MINI_TEST!("Read Bunny", {
@@ -37,10 +37,10 @@ pub fn run_file_xyz_read_bunny() -> TestResult {
 
 pub fn run_file_xyz_write_read_roundtrip() -> TestResult {
     MINI_TEST!("Write Read Roundtrip", {
-        use crate::read_xyz;
-        use crate::write_xyz;
         use crate::Point;
         use crate::PointCloud;
+        use crate::read_xyz;
+        use crate::write_xyz;
         use std::path::PathBuf;
 
         std::fs::create_dir_all("./serialization").unwrap();
@@ -66,10 +66,10 @@ pub fn run_file_xyz_write_read_roundtrip() -> TestResult {
 
 pub fn run_file_xyz_string_roundtrip() -> TestResult {
     MINI_TEST!("String Roundtrip", {
-        use crate::read_xyz_from_str;
-        use crate::write_xyz_to_string;
         use crate::Point;
         use crate::PointCloud;
+        use crate::read_xyz_from_str;
+        use crate::write_xyz_to_string;
 
         let mut original = PointCloud::default();
         original.add_point(&Point::new(0.0, 0.0, 0.0));

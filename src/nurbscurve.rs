@@ -11,15 +11,15 @@ use crate::nurbsknot::CurveInterpStyle;
 use crate::nurbsknot::CurveNurbsKnotStyle;
 use crate::plane::Plane;
 use crate::point::Point;
-use crate::tolerance::Tolerance;
 use crate::tolerance::TOLERANCE;
+use crate::tolerance::Tolerance;
 use crate::vector::Vector;
 use crate::xform::Xform;
-use serde::ser::SerializeMap;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
+use serde::ser::SerializeMap;
 use std::fmt;
 use std::sync::OnceLock;
 
@@ -2669,7 +2669,13 @@ impl NurbsCurve {
     /// Return the multi-line form with every control point.
     pub fn repr(&self) -> String {
         let prec = Tolerance::ROUNDING;
-        let mut result = format!("NurbsCurve(\n  name={},\n  degree={},\n  cvs={},\n  rational={},\n  control_points=[\n", self.name, self.degree(), self.m_cv_count, if self.m_is_rat { "true" } else { "false" });
+        let mut result = format!(
+            "NurbsCurve(\n  name={},\n  degree={},\n  cvs={},\n  rational={},\n  control_points=[\n",
+            self.name,
+            self.degree(),
+            self.m_cv_count,
+            if self.m_is_rat { "true" } else { "false" }
+        );
 
         for i in 0..self.m_cv_count {
             let p = self.get_cv(i).unwrap_or_default();

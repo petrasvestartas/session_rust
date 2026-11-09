@@ -1,7 +1,7 @@
-use serde::ser::SerializeMap;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serializer;
+use serde::ser::SerializeMap;
 use std::fmt;
 use std::ops::Index;
 use std::ops::IndexMut;

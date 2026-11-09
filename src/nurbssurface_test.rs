@@ -3,11 +3,11 @@
     clippy::excessive_precision,
     clippy::needless_range_loop
 )]
-use crate::mini_test::TestResult;
-use crate::tolerance::TOLERANCE;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::TOLERANCE;
 
 pub fn run_nurbssurface_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -58,7 +58,10 @@ pub fn run_nurbssurface_constructor() -> TestResult {
         MINI_CHECK!(s.name == "my_nurbssurface");
         MINI_CHECK!(!s.guid().is_empty());
         MINI_CHECK!(sstr == "NurbsSurface(name=my_nurbssurface, degree=(3,3), cvs=(4,4))");
-        MINI_CHECK!(srepr == "NurbsSurface(\n  name=my_nurbssurface,\n  degree=(3,3),\n  cvs=(4,4),\n  rational=false,\n  control_points=[\n    0, 0, 0\n    -1, 0.75, 2\n    -1, 4.25, 2\n    0, 5, 0\n    0.75, -1, 2\n    1.25, 1.25, 4\n    1.25, 3.75, 4\n    0.75, 6, 2\n    4.25, -1, 2\n    3.75, 1.25, 4\n    3.75, 3.75, 4\n    4.25, 6, 2\n    5, 0, 0\n    6, 0.75, 2\n    6, 4.25, 2\n    5, 5, 0\n  ]\n)");
+        MINI_CHECK!(
+            srepr
+                == "NurbsSurface(\n  name=my_nurbssurface,\n  degree=(3,3),\n  cvs=(4,4),\n  rational=false,\n  control_points=[\n    0, 0, 0\n    -1, 0.75, 2\n    -1, 4.25, 2\n    0, 5, 0\n    0.75, -1, 2\n    1.25, 1.25, 4\n    1.25, 3.75, 4\n    0.75, 6, 2\n    4.25, -1, 2\n    3.75, 1.25, 4\n    3.75, 3.75, 4\n    4.25, 6, 2\n    5, 0, 0\n    6, 0.75, 2\n    6, 4.25, 2\n    5, 5, 0\n  ]\n)"
+        );
         MINI_CHECK!(scopy.cv_count_total() == s.cv_count_total());
         MINI_CHECK!(scopy.guid() != s.guid());
         MINI_CHECK!(s == sother);
@@ -332,9 +335,9 @@ pub fn run_nurbssurface_create_from_parameters() -> TestResult {
 
 pub fn run_nurbssurface_booleans_queries() -> TestResult {
     MINI_TEST!("Booleans Queries", {
-        use crate::tolerance::Tolerance;
         use crate::Plane;
         use crate::Primitives;
+        use crate::tolerance::Tolerance;
 
         let s = Primitives::sphere_surface(0.0, 0.0, 0.0, 5.0);
 
@@ -1369,22 +1372,37 @@ pub fn run_nurbssurface_meshing() -> TestResult {
 
 pub fn run_nurbssurface_mesh_planar_curved_boundary() -> TestResult {
     MINI_TEST!("Mesh Planar Curved Boundary", {
-        use crate::tolerance::Tolerance;
-        use crate::tolerance::PI;
         use crate::Point;
         use crate::Primitives;
+        use crate::tolerance::PI;
+        use crate::tolerance::Tolerance;
 
         let c = 0.5f64.sqrt();
         let outer_mid = Point::new(2.0 * c, 0.0, 2.0 * c);
-        let outer = Primitives::arc(&Point::new(2.0, 0.0, 0.0), &outer_mid, &Point::new(0.0, 0.0, 2.0));
-        let inner = Primitives::arc(&Point::new(1.0, 0.0, 0.0), &Point::new(c, 0.0, c), &Point::new(0.0, 0.0, 1.0));
+        let outer = Primitives::arc(
+            &Point::new(2.0, 0.0, 0.0),
+            &outer_mid,
+            &Point::new(0.0, 0.0, 2.0),
+        );
+        let inner = Primitives::arc(
+            &Point::new(1.0, 0.0, 0.0),
+            &Point::new(c, 0.0, c),
+            &Point::new(0.0, 0.0, 1.0),
+        );
         let side = Primitives::create_ruled(&outer, &inner);
         let mesh = side.mesh();
         let r = PI / 4.0 * (2.0 * 2.0 - 1.0 * 1.0);
 
         MINI_CHECK!(side.is_planar(None, Tolerance::ZERO_TOLERANCE));
         MINI_CHECK!(mesh.vertex.len() > 4);
-        MINI_CHECK!(mesh.vertex.values().next().unwrap().attributes.contains_key("u"));
+        MINI_CHECK!(
+            mesh.vertex
+                .values()
+                .next()
+                .unwrap()
+                .attributes
+                .contains_key("u")
+        );
         MINI_CHECK!((mesh.area() - r).abs() / r < 0.01);
     })
 }
@@ -1423,12 +1441,12 @@ pub fn run_nurbssurface_split_by_plane() -> TestResult {
 
 pub fn run_nurbssurface_split_by_curves() -> TestResult {
     MINI_TEST!("Split By Curves", {
-        use crate::nurbsknot::CurveInterpStyle;
-        use crate::nurbsknot::CurveNurbsKnotStyle;
         use crate::Closest;
         use crate::NurbsCurve;
         use crate::Point;
         use crate::Primitives;
+        use crate::nurbsknot::CurveInterpStyle;
+        use crate::nurbsknot::CurveNurbsKnotStyle;
 
         let wave = Primitives::wave_surface(10.0, 1.0);
         let mut lift_pts = Vec::new();
@@ -1784,7 +1802,12 @@ pub fn run_nurbssurface_is_visible_round_trip() -> TestResult {
         use crate::NurbsSurface;
         use crate::Point;
 
-        let points = vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(0.0, 1.0, 0.0), Point::new(1.0, 1.0, 0.0)];
+        let points = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+        ];
         let mut hidden = NurbsSurface::create(false, false, 1, 1, 2, 2, &points).unwrap();
 
         MINI_CHECK!(hidden.is_visible);
@@ -1809,7 +1832,12 @@ pub fn run_nurbssurface_is_locked_round_trip() -> TestResult {
         use crate::NurbsSurface;
         use crate::Point;
 
-        let points = vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(0.0, 1.0, 0.0), Point::new(1.0, 1.0, 0.0)];
+        let points = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(0.0, 1.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+        ];
         let mut locked = NurbsSurface::create(false, false, 1, 1, 2, 2, &points).unwrap();
 
         MINI_CHECK!(!locked.is_locked);

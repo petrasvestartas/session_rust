@@ -1,8 +1,8 @@
-use crate::mini_test::TestResult;
 use crate::Interaction;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
 use std::sync::OnceLock;
 
 /// A test-only implementor: a named interaction with no state of its own.

@@ -1,7 +1,7 @@
-use crate::mini_test::TestResult;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Vertex
@@ -23,9 +23,9 @@ pub fn run_vertex_constructor() -> TestResult {
 
 pub fn run_vertex_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
+        use crate::Vertex;
         use crate::file_encoders::file_json_dump;
         use crate::file_encoders::file_json_load;
-        use crate::Vertex;
 
         let mut original = Vertex::new("v0", "test_attribute");
         original.attributes.insert("load".to_string(), 1.5);
@@ -58,9 +58,9 @@ pub fn run_edge_constructor() -> TestResult {
 
 pub fn run_edge_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
+        use crate::Edge;
         use crate::file_encoders::file_json_dump;
         use crate::file_encoders::file_json_load;
-        use crate::Edge;
 
         let mut original = Edge::new("v0", "v1", "test_edge_attr");
         original.attributes.insert("weight".to_string(), 2.5);

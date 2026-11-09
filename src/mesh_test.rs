@@ -1,15 +1,15 @@
-use crate::mini_test::TestResult;
-use crate::tolerance::TOLERANCE;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::TOLERANCE;
 
 pub fn run_mesh_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
-        use crate::mesh::ColorMode;
         use crate::Color;
         use crate::Mesh;
         use crate::Polyline;
+        use crate::mesh::ColorMode;
 
         let vertices = Polyline::from_sides(6, 1.0, false).get_points();
         let mut mesh = Mesh::from_vertices_and_faces(vertices, vec![vec![0, 1, 2, 3, 4, 5]]);
@@ -643,11 +643,11 @@ pub fn run_mesh_loft_many() -> TestResult {
 
 pub fn run_mesh_loft_panels() -> TestResult {
     MINI_TEST!("Loft With Quads And Triangles", {
-        use crate::mesh::LoftFaceRole;
-        use crate::mesh::LoftResult;
         use crate::Color;
         use crate::Mesh;
         use crate::Point;
+        use crate::mesh::LoftFaceRole;
+        use crate::mesh::LoftResult;
 
         let top7: Vec<Vec<Point>> = vec![
             vec![
@@ -1355,10 +1355,10 @@ pub fn run_mesh_connectivity_queries() -> TestResult {
 
 pub fn run_mesh_geometric_properties() -> TestResult {
     MINI_TEST!("Geometric Properties", {
-        use crate::mesh::NormalWeighting;
         use crate::Mesh;
         use crate::Point;
         use crate::Vector;
+        use crate::mesh::NormalWeighting;
 
         let mesh = Mesh::create_dodecahedron(1.5);
 
@@ -2000,12 +2000,14 @@ pub fn run_mesh_section_by_plane_open() -> TestResult {
         let high_start = mesh.add_vertex(Point::new(5.0, 0.0, 1.0), None);
         let high_corner = mesh.add_vertex(Point::new(7.0, 0.0, 1.0), None);
         let high_end = mesh.add_vertex(Point::new(7.0, 2.0, 1.0), None);
-        MINI_CHECK!(mesh
-            .add_face(vec![low_start, low_corner, high_corner, high_start], None)
-            .is_some());
-        MINI_CHECK!(mesh
-            .add_face(vec![low_corner, low_end, high_end, high_corner], None)
-            .is_some());
+        MINI_CHECK!(
+            mesh.add_face(vec![low_start, low_corner, high_corner, high_start], None)
+                .is_some()
+        );
+        MINI_CHECK!(
+            mesh.add_face(vec![low_corner, low_end, high_end, high_corner], None)
+                .is_some()
+        );
         let section = mesh.section_by_plane(&Plane::from_point_normal(
             Point::new(0.0, 0.0, 0.0),
             Vector::new(0.0, 0.0, 1.0),
@@ -3542,11 +3544,7 @@ pub fn run_mesh_offset() -> TestResult {
     })
 }
 
-REGISTER_MINI_TEST!(
-    "Mesh",
-    "Offset",
-    crate::mesh_test::run_mesh_offset
-);
+REGISTER_MINI_TEST!("Mesh", "Offset", crate::mesh_test::run_mesh_offset);
 
 pub fn run_mesh_offset_grid() -> TestResult {
     MINI_TEST!("Offset Grid", {

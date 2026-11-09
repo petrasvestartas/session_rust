@@ -1,8 +1,8 @@
-use crate::mini_test::TestResult;
-use crate::tolerance::TOLERANCE;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::TOLERANCE;
 
 pub fn run_vector_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -78,9 +78,9 @@ pub fn run_vector_constructor() -> TestResult {
 
 pub fn run_vector_transformation() -> TestResult {
     MINI_TEST!("Transformation", {
-        use crate::tolerance::PI;
         use crate::Vector;
         use crate::Xform;
+        use crate::tolerance::PI;
 
         let mut v = Vector::new(1.0, 2.0, 3.0);
         let xform = Xform::translation(10.0, 20.0, 30.0);
@@ -186,8 +186,8 @@ pub fn run_vector_cross_product() -> TestResult {
 
 pub fn run_vector_angle() -> TestResult {
     MINI_TEST!("Angle", {
-        use crate::tolerance::PI;
         use crate::Vector;
+        use crate::tolerance::PI;
 
         let v1 = Vector::new(1.0, 0.0, 0.0);
         let v2 = Vector::new(0.0, 1.0, 0.0);
@@ -401,8 +401,8 @@ pub fn run_vector_is_zero() -> TestResult {
 
 pub fn run_vector_scale() -> TestResult {
     MINI_TEST!("Scale", {
-        use crate::tolerance::SCALE;
         use crate::Vector;
+        use crate::tolerance::SCALE;
 
         let mut v_up = Vector::new(1.0, 2.0, 3.0);
         v_up.scale_up();

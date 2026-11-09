@@ -1,13 +1,13 @@
-use crate::mini_test::TestResult;
-use crate::tolerance::TOLERANCE;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::TOLERANCE;
 
 pub fn run_aabb_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
-        use crate::Point;
         use crate::AABB;
+        use crate::Point;
 
         let a = AABB::new(0.0, 0.0, 0.0, 1.0, 2.0, 3.0);
         let empty = AABB::default();
@@ -59,8 +59,8 @@ pub fn run_aabb_constructor() -> TestResult {
 
 pub fn run_aabb_empty() -> TestResult {
     MINI_TEST!("Empty", {
-        use crate::Point;
         use crate::AABB;
+        use crate::Point;
 
         let mut a = AABB::empty();
         let empty_valid = a.is_valid();
@@ -97,9 +97,9 @@ pub fn run_aabb_empty() -> TestResult {
 
 pub fn run_aabb_transform() -> TestResult {
     MINI_TEST!("Transform", {
+        use crate::AABB;
         use crate::Point;
         use crate::Xform;
-        use crate::AABB;
 
         let mut a = AABB::new(0.0, 0.0, 0.0, 1.0, 2.0, 3.0);
         let moved = a.transformed(&Xform::translation(1.0, 2.0, 3.0));
@@ -118,6 +118,7 @@ pub fn run_aabb_transform() -> TestResult {
 
 pub fn run_aabb_from_geometry() -> TestResult {
     MINI_TEST!("From Geometry", {
+        use crate::AABB;
         use crate::Color;
         use crate::Line;
         use crate::NurbsCurve;
@@ -127,7 +128,6 @@ pub fn run_aabb_from_geometry() -> TestResult {
         use crate::Polyline;
         use crate::Primitives;
         use crate::Vector;
-        use crate::AABB;
 
         let a_pt = AABB::from_point(&Point::new(1.0, 2.0, 3.0), 0.5);
 
@@ -213,9 +213,9 @@ pub fn run_aabb_from_geometry() -> TestResult {
 
 pub fn run_aabb_from_nurbscurve_tight() -> TestResult {
     MINI_TEST!("From Nurbscurve Tight", {
+        use crate::AABB;
         use crate::NurbsCurve;
         use crate::Point;
-        use crate::AABB;
 
         let bulge = NurbsCurve::create(
             false,

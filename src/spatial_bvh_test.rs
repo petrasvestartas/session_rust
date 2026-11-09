@@ -1,14 +1,14 @@
-use crate::mini_test::TestResult;
-use crate::tolerance::TOLERANCE;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::TOLERANCE;
 
 pub fn run_bvh_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
-        use crate::SpatialBVH;
         use crate::AABB;
         use crate::OBB;
+        use crate::SpatialBVH;
 
         let boxes = vec![
             OBB::from_aabb(&AABB::new(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)),
@@ -118,8 +118,8 @@ pub fn run_bvh_creation() -> TestResult {
 
 pub fn run_bvh_build_empty() -> TestResult {
     MINI_TEST!("Build Empty", {
-        use crate::SpatialBVH;
         use crate::OBB;
+        use crate::SpatialBVH;
 
         let boxes: Vec<OBB> = Vec::new();
         let bvh = SpatialBVH::from_boxes(&boxes, 100.0);
@@ -130,9 +130,9 @@ pub fn run_bvh_build_empty() -> TestResult {
 
 pub fn run_bvh_build_single() -> TestResult {
     MINI_TEST!("Build Single", {
-        use crate::SpatialBVH;
         use crate::AABB;
         use crate::OBB;
+        use crate::SpatialBVH;
 
         let boxes = vec![OBB::from_aabb(&AABB::new(0.0, 0.0, 0.0, 1.0, 1.0, 1.0))];
         let bvh = SpatialBVH::from_boxes(&boxes, 100.0);
@@ -145,9 +145,9 @@ pub fn run_bvh_build_single() -> TestResult {
 
 pub fn run_bvh_build_multiple() -> TestResult {
     MINI_TEST!("Build Multiple", {
-        use crate::SpatialBVH;
         use crate::AABB;
         use crate::OBB;
+        use crate::SpatialBVH;
 
         let boxes = vec![
             OBB::from_aabb(&AABB::new(-10.0, 0.0, 0.0, 1.0, 1.0, 1.0)),
@@ -165,9 +165,9 @@ pub fn run_bvh_build_multiple() -> TestResult {
 
 pub fn run_bvh_aabb_intersect() -> TestResult {
     MINI_TEST!("Aabb Intersect", {
-        use crate::SpatialBVH;
         use crate::AABB;
         use crate::OBB;
+        use crate::SpatialBVH;
 
         let bvh = SpatialBVH::with_world_size(100.0);
         let bbox1 = OBB::from_aabb(&AABB::new(0.0, 0.0, 0.0, 1.0, 1.0, 1.0));
@@ -185,9 +185,9 @@ pub fn run_bvh_aabb_intersect() -> TestResult {
 
 pub fn run_bvh_check_all_collisions() -> TestResult {
     MINI_TEST!("Check All Collisions", {
-        use crate::SpatialBVH;
         use crate::AABB;
         use crate::OBB;
+        use crate::SpatialBVH;
 
         let boxes = vec![
             OBB::from_aabb(&AABB::new(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)),
@@ -211,9 +211,9 @@ pub fn run_bvh_check_all_collisions() -> TestResult {
 
 pub fn run_bvh_nearest_neighbors() -> TestResult {
     MINI_TEST!("Nearest Neighbors", {
-        use crate::SpatialBVH;
         use crate::AABB;
         use crate::OBB;
+        use crate::SpatialBVH;
 
         let boxes = vec![
             OBB::from_aabb(&AABB::new(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)),
@@ -238,9 +238,9 @@ pub fn run_bvh_nearest_neighbors() -> TestResult {
 
 pub fn run_bvh_merge_aabb() -> TestResult {
     MINI_TEST!("Merge Aabb", {
-        use crate::SpatialBVH;
         use crate::AABB;
         use crate::OBB;
+        use crate::SpatialBVH;
 
         let bvh = SpatialBVH::with_world_size(100.0);
         let bbox1 = OBB::from_aabb(&AABB::new(0.0, 0.0, 0.0, 1.0, 1.0, 1.0));
@@ -254,10 +254,10 @@ pub fn run_bvh_merge_aabb() -> TestResult {
 
 pub fn run_bvh_fixed_100_boxes() -> TestResult {
     MINI_TEST!("Fixed 100 Boxes", {
-        use crate::Point;
-        use crate::SpatialBVH;
         use crate::AABB;
         use crate::OBB;
+        use crate::Point;
+        use crate::SpatialBVH;
 
         let corners: [[f64; 6]; 100] = [
             [-53.1254, -0.98185, 20.5516, -46.8089, 5.89927, 26.5331],
@@ -388,9 +388,9 @@ pub fn run_bvh_fixed_100_boxes() -> TestResult {
 
 pub fn run_bvh_query_aabb() -> TestResult {
     MINI_TEST!("Query Aabb", {
-        use crate::SpatialBVH;
         use crate::AABB;
         use crate::OBB;
+        use crate::SpatialBVH;
 
         let boxes = vec![
             OBB::from_aabb(&AABB::new(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)),
@@ -412,9 +412,9 @@ pub fn run_bvh_query_aabb() -> TestResult {
 
 pub fn run_bvh_build_from_boxes() -> TestResult {
     MINI_TEST!("Build From Boxes", {
-        use crate::SpatialBVH;
         use crate::AABB;
         use crate::OBB;
+        use crate::SpatialBVH;
 
         let boxes = vec![
             OBB::from_aabb(&AABB::new(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)),
@@ -433,8 +433,8 @@ pub fn run_bvh_build_from_boxes() -> TestResult {
 
 pub fn run_bvh_build_from_aabbs() -> TestResult {
     MINI_TEST!("Build From Aabbs", {
-        use crate::SpatialBVH;
         use crate::AABB;
+        use crate::SpatialBVH;
 
         let aabbs = vec![
             AABB::new(0.0, 0.0, 0.0, 2.0, 2.0, 2.0),
@@ -453,9 +453,9 @@ pub fn run_bvh_build_from_aabbs() -> TestResult {
 
 pub fn run_bvh_build_with_guids() -> TestResult {
     MINI_TEST!("Build With Guids", {
-        use crate::SpatialBVH;
         use crate::AABB;
         use crate::OBB;
+        use crate::SpatialBVH;
 
         let boxes_with_guids = vec![
             (
@@ -482,9 +482,9 @@ pub fn run_bvh_build_with_guids() -> TestResult {
 
 pub fn run_bvh_check_all_collisions_guids() -> TestResult {
     MINI_TEST!("Check All Collisions Guids", {
-        use crate::SpatialBVH;
         use crate::AABB;
         use crate::OBB;
+        use crate::SpatialBVH;
 
         let boxes = vec![
             OBB::from_aabb(&AABB::new(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)),
@@ -508,9 +508,9 @@ pub fn run_bvh_check_all_collisions_guids() -> TestResult {
 
 pub fn run_bvh_find_collisions() -> TestResult {
     MINI_TEST!("Find Collisions", {
-        use crate::SpatialBVH;
         use crate::AABB;
         use crate::OBB;
+        use crate::SpatialBVH;
 
         let boxes = vec![
             OBB::from_aabb(&AABB::new(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)),
@@ -529,11 +529,11 @@ pub fn run_bvh_find_collisions() -> TestResult {
 
 pub fn run_bvh_ray_cast() -> TestResult {
     MINI_TEST!("Ray Cast", {
+        use crate::AABB;
+        use crate::OBB;
         use crate::Point;
         use crate::SpatialBVH;
         use crate::Vector;
-        use crate::AABB;
-        use crate::OBB;
 
         let boxes = vec![
             OBB::from_aabb(&AABB::new(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)),

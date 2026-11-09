@@ -14,9 +14,9 @@ use crate::plane::Plane;
 use crate::point::Point;
 use crate::polyline::Polyline;
 use crate::spatial_bvh::SpatialBVH;
-use crate::tolerance::Tolerance;
 use crate::tolerance::PI;
 use crate::tolerance::TWO_PI;
+use crate::tolerance::Tolerance;
 use crate::vector::Vector;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -440,11 +440,7 @@ pub fn line_plane(line: &Line, plane: &Plane, is_finite: bool) -> Option<Point> 
         return None;
     }
 
-    if rc {
-        Some(output)
-    } else {
-        None
-    }
+    if rc { Some(output) } else { None }
 }
 
 /// Intersection point of three planes.
@@ -8074,11 +8070,7 @@ fn cell_diagonal(boxes: &[[f64; 8]]) -> f64 {
         }
     }
 
-    if best < f64::INFINITY {
-        best
-    } else {
-        1.0
-    }
+    if best < f64::INFINITY { best } else { 1.0 }
 }
 
 /// Grid seed of a surface-surface trace in joint parameters.

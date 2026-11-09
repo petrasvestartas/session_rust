@@ -333,8 +333,8 @@ mod picking_tests {
     /// BVH world_size covers every object, far ones included.
     #[test]
     fn test_bvh_world_size_covers_far_objects() {
-        use crate::SpatialBVH;
         use crate::OBB;
+        use crate::SpatialBVH;
 
         let positions: &[(f64, f64, f64, f64)] = &[
             (0.0, 0.0, 0.0, 400.0),
@@ -410,7 +410,16 @@ mod picking_tests {
         assert!(
             dot > 0.999,
             "{label}: ray direction mismatch — dot={:.6}, dir=({:.4},{:.4},{:.4}), expected=({:.4},{:.4},{:.4}), origin=({:.1},{:.1},{:.1})",
-            dot, dir[0], dir[1], dir[2], dx/len, dy/len, dz/len, origin[0], origin[1], origin[2]
+            dot,
+            dir[0],
+            dir[1],
+            dir[2],
+            dx / len,
+            dy / len,
+            dz / len,
+            origin[0],
+            origin[1],
+            origin[2]
         );
     }
 
@@ -512,7 +521,12 @@ mod picking_tests {
             assert!(
                 !hits.is_empty(),
                 "end-to-end FAIL: {name} — viewer ray_cast returned no hits. origin=({:.1},{:.1},{:.1}) dir=({:.4},{:.4},{:.4})",
-                origin[0], origin[1], origin[2], dir[0], dir[1], dir[2]
+                origin[0],
+                origin[1],
+                origin[2],
+                dir[0],
+                dir[1],
+                dir[2]
             );
         }
     }

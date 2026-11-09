@@ -1,8 +1,8 @@
-use crate::mini_test::TestResult;
-use crate::tolerance::TOLERANCE;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::TOLERANCE;
 
 pub fn run_point_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -60,7 +60,10 @@ pub fn run_point_constructor() -> TestResult {
         MINI_CHECK!(!p.guid().is_empty());
         MINI_CHECK!(x == 10.0 && y == 20.0 && z == 30.0);
         MINI_CHECK!(pstr == "10.000000, 20.000000, 30.000000");
-        MINI_CHECK!(prepr == "Point(my_point, 10.000000, 20.000000, 30.000000, Color(black, 0.0, 0.0, 0.0, 1.0), 1.000000)");
+        MINI_CHECK!(
+            prepr
+                == "Point(my_point, 10.000000, 20.000000, 30.000000, Color(black, 0.0, 0.0, 0.0, 1.0), 1.000000)"
+        );
         MINI_CHECK!(pcopy == p && pcopy.guid() != p.guid());
         MINI_CHECK!(pother != p);
         MINI_CHECK!(pmult[0] == 20.0 && pmult[1] == 40.0 && pmult[2] == 60.0);

@@ -10,15 +10,15 @@ use crate::point::Point;
 use crate::polyline::Polyline;
 use crate::primitives::Primitives;
 use crate::remesh_nurbssurface_grid::RemeshNurbsSurfaceGrid;
-use crate::tolerance::Tolerance;
 use crate::tolerance::PI;
+use crate::tolerance::Tolerance;
 use crate::vector::Vector;
 use crate::xform::Xform;
-use serde::ser::SerializeMap;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
+use serde::ser::SerializeMap;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -987,11 +987,7 @@ fn golden_parameter(
         }
     }
 
-    if da < db {
-        (a, da)
-    } else {
-        (b, db)
-    }
+    if da < db { (a, da) } else { (b, db) }
 }
 
 /// Parameter of the lifted pcurve closest to `point`: a coarse scan then golden-section steps in the best cell, and in the cell at the other end too when a closed pcurve scans best at an end, since both ends are one point
@@ -1017,7 +1013,8 @@ fn boundary_parameter(surface: &NurbsSurface, curve: &NurbsCurve, point: &Point)
     }
 
     let mut cells = vec![((best - step).max(start), (best + step).min(end))];
-    let closed = curve.point_at(start).distance(&curve.point_at(end), None) <= Tolerance::ZERO_TOLERANCE;
+    let closed =
+        curve.point_at(start).distance(&curve.point_at(end), None) <= Tolerance::ZERO_TOLERANCE;
 
     if closed && best == start {
         cells.push((end - step, end));
@@ -1115,7 +1112,9 @@ fn refine_surface_boundary(
         return samples.to_vec();
     }
 
-    if !crate::display_budget::charge(samples.len().saturating_mul(3)) { return Vec::new(); }
+    if !crate::display_budget::charge(samples.len().saturating_mul(3)) {
+        return Vec::new();
+    }
     let tolerance = scale * chord;
     let cosine = (angle.clamp(0.1, 179.0) * PI / 180.0).cos();
     let mut result = Vec::new();
@@ -1148,7 +1147,9 @@ fn refine_surface_boundary(
                 continue;
             }
 
-            if !crate::display_budget::charge(3) { return Vec::new(); }
+            if !crate::display_budget::charge(3) {
+                return Vec::new();
+            }
             added += 1;
             let middle = (t, uv, point);
             stack.push((middle.clone(), b, depth + 1));
@@ -1631,7 +1632,13 @@ fn pcurve_newton(crv: &NurbsCurve, uv: &Point, seed: f64) -> f64 {
 }
 
 /// Phase 3: first guess of the pcurve parameter of a canonical point: two dot products on a planar patch with a straight pcurve, Newton from the seed when the previous points of the edge give one, else the full closest-point search
-fn canonical_parameter(srf: &NurbsSurface, crv: &NurbsCurve, p: &Point, planar: bool, seed: Option<f64>) -> f64 {
+fn canonical_parameter(
+    srf: &NurbsSurface,
+    crv: &NurbsCurve,
+    p: &Point,
+    planar: bool,
+    seed: Option<f64>,
+) -> f64 {
     let patch_uv = if planar {
         planar_patch_uv(srf, p)
     } else {
@@ -1676,7 +1683,9 @@ fn lift_canonical(
         None => false,
     };
     let points = &boundary.points[&ei];
-    if !crate::display_budget::charge(points.len().saturating_mul(2)) { return; }
+    if !crate::display_budget::charge(points.len().saturating_mul(2)) {
+        return;
+    }
     let planar = is_planar_patch(srf);
     let mut lifted: Vec<f64> = Vec::new();
 
@@ -1723,9 +1732,14 @@ fn fresh_samples(
     let count = if crv.degree() <= 1 && !crv.is_rational() && is_planar_patch(srf) {
         crv.cv_count()
     } else {
-        (crv.cv_count() * 4).max((360.0 / angle.max(0.1)).ceil() as usize).min(4096).saturating_add(1)
+        (crv.cv_count() * 4)
+            .max((360.0 / angle.max(0.1)).ceil() as usize)
+            .min(4096)
+            .saturating_add(1)
     };
-    if !crate::display_budget::charge(count.saturating_mul(2)) { return Vec::new(); }
+    if !crate::display_budget::charge(count.saturating_mul(2)) {
+        return Vec::new();
+    }
     let mut points = Vec::new();
     let mut parameters = Vec::new();
 
@@ -1926,8 +1940,14 @@ fn wind_to_normal(mesh: &mut Mesh, normal: &Vector) {
 
 /// Phase 3 for a planar face: the sampled loops triangulated as one polygon with holes, wound to the surface normal, every loop vertex tagged boundary/{loop}/{sample} as mesh_loops does; no grid, no surface evaluation
 fn planar_loops_mesh(srf: &NurbsSurface, loops: &TrimLoops) -> Mesh {
-    let count = loops.uv.iter().map(Vec::len).fold(0usize, usize::saturating_add);
-    if !crate::display_budget::charge(count.saturating_mul(4)) { return Mesh::new(); }
+    let count = loops
+        .uv
+        .iter()
+        .map(Vec::len)
+        .fold(0usize, usize::saturating_add);
+    if !crate::display_budget::charge(count.saturating_mul(4)) {
+        return Mesh::new();
+    }
     use crate::remesh_cdt::project_2d;
     use crate::remesh_cdt::signed_area;
 
@@ -2015,7 +2035,11 @@ fn tag_edge_uses(mesh: &mut Mesh, loops: &TrimLoops, uses: &[(usize, usize, usiz
             let tag = format!("brep_edge/{edge}/{use_id}/{sample}");
 
             for vk in lookup.get(&key).unwrap_or(&none) {
-                mesh.vertex.get_mut(vk).unwrap().attributes.insert(tag.clone(), 1.0);
+                mesh.vertex
+                    .get_mut(vk)
+                    .unwrap()
+                    .attributes
+                    .insert(tag.clone(), 1.0);
             }
 
             if sample + 1 >= count {
@@ -2132,7 +2156,11 @@ fn strip_sag(srf: &NurbsSurface, crv: &NurbsCurve, count: usize) -> f64 {
     for k in 0..count {
         let a = &coarse[k].2;
         let z = &coarse[k + 1].2;
-        let middle = Point::new((a[0] + z[0]) * 0.5, (a[1] + z[1]) * 0.5, (a[2] + z[2]) * 0.5);
+        let middle = Point::new(
+            (a[0] + z[0]) * 0.5,
+            (a[1] + z[1]) * 0.5,
+            (a[2] + z[2]) * 0.5,
+        );
         sag = sag.max(fine[2 * k + 1].2.distance(&middle, None));
     }
 
@@ -2155,7 +2183,14 @@ fn strip_steps(srf: &NurbsSurface, crv: &NurbsCurve) -> usize {
 }
 
 /// Phase 0: the steps of a strip: the angle's share of a turn and what the loops ask for, scaled by the face's size against the whole BRep so a small bore in a large body keeps few steps, never under thirty-two so a bore still reads round up close, doubled until both loops sag within the chord tolerance measured against the BRep
-fn strip_count(srf: &NurbsSurface, a: &NurbsCurve, c: &NurbsCurve, scale: f64, angle: f64, chord: f64) -> usize {
+fn strip_count(
+    srf: &NurbsSurface,
+    a: &NurbsCurve,
+    c: &NurbsCurve,
+    scale: f64,
+    angle: f64,
+    chord: f64,
+) -> usize {
     let tolerance = scale * chord;
     let asked = strip_steps(srf, a)
         .max(strip_steps(srf, c))
@@ -2167,7 +2202,10 @@ fn strip_count(srf: &NurbsSurface, a: &NurbsCurve, c: &NurbsCurve, scale: f64, a
     };
     let mut count = ((asked as f64 * share).ceil() as usize).max(32);
 
-    while count < 4096 && tolerance > 0.0 && strip_sag(srf, a, count).max(strip_sag(srf, c, count)) > tolerance {
+    while count < 4096
+        && tolerance > 0.0
+        && strip_sag(srf, a, count).max(strip_sag(srf, c, count)) > tolerance
+    {
         count *= 2;
     }
 
@@ -2175,7 +2213,12 @@ fn strip_count(srf: &NurbsSurface, a: &NurbsCurve, c: &NurbsCurve, scale: f64, a
 }
 
 /// Phase 0: a strip vertex at a sample, tagged with its parameters, its normal and its index in the keyhole loop
-fn strip_vertex(srf: &NurbsSurface, mesh: &mut Mesh, sample: &(f64, Point, Point), index: usize) -> usize {
+fn strip_vertex(
+    srf: &NurbsSurface,
+    mesh: &mut Mesh,
+    sample: &(f64, Point, Point),
+    index: usize,
+) -> usize {
     let uv = &sample.1;
     let normal = srf.normal_at(uv[0], uv[1]);
     let key = mesh.add_vertex(sample.2.clone(), None);
@@ -2190,22 +2233,37 @@ fn strip_vertex(srf: &NurbsSurface, mesh: &mut Mesh, sample: &(f64, Point, Point
 }
 
 /// Phase 0: the strip of a face: both loops sampled at the same steps, closed on their vertex, and made the canonical boundary of their edges, two triangles between every pair of steps, the vertices numbered as the keyhole polygon a CDT face runs (first loop, seam, second loop backwards, seam) so the edge uses tag as there; no surface refinement, no lifting
-fn strip_mesh(b: &BRep, fi: usize, boundary: &mut EdgeBoundary, scale: f64, angle: f64, chord: f64) -> Mesh {
+fn strip_mesh(
+    b: &BRep,
+    fi: usize,
+    boundary: &mut EdgeBoundary,
+    scale: f64,
+    angle: f64,
+    chord: f64,
+) -> Mesh {
     let face = &b.m_faces[fi];
     let srf = &b.m_surfaces[face.surface_index as usize];
     let edges = b.wire_edges(&face.wires[0]);
-    let a = &b.m_curves_2d[b.pcurve_index(edges[0].index as usize, fi, edges[0].orientation) as usize];
-    let c = &b.m_curves_2d[b.pcurve_index(edges[2].index as usize, fi, edges[2].orientation) as usize];
+    let a =
+        &b.m_curves_2d[b.pcurve_index(edges[0].index as usize, fi, edges[0].orientation) as usize];
+    let c =
+        &b.m_curves_2d[b.pcurve_index(edges[2].index as usize, fi, edges[2].orientation) as usize];
     let count = strip_count(srf, a, c, scale, angle, chord);
-    if !crate::display_budget::charge(count.saturating_add(1).saturating_mul(8)) { return Mesh::new(); }
+    if !crate::display_budget::charge(count.saturating_add(1).saturating_mul(8)) {
+        return Mesh::new();
+    }
     let mut first = strip_samples(srf, a, count);
     let mut second = strip_samples(srf, c, count);
     snap_sample_ends(&mut first, &edge_ends(b, edges[0].index as usize));
     snap_sample_ends(&mut second, &edge_ends(b, edges[2].index as usize));
     let mut mesh = Mesh::new();
     let mut loops = TrimLoops::default();
-    loops.uv.push(vec![Point::new(0.0, 0.0, 0.0); 2 * count + 2]);
-    loops.xyz.push(vec![Point::new(0.0, 0.0, 0.0); 2 * count + 2]);
+    loops
+        .uv
+        .push(vec![Point::new(0.0, 0.0, 0.0); 2 * count + 2]);
+    loops
+        .xyz
+        .push(vec![Point::new(0.0, 0.0, 0.0); 2 * count + 2]);
     let mut bottom: Vec<usize> = Vec::new();
     let mut top: Vec<usize> = Vec::new();
 
@@ -2216,8 +2274,16 @@ fn strip_mesh(b: &BRep, fi: usize, boundary: &mut EdgeBoundary, scale: f64, angl
         loops.xyz[0][k] = first[k].2.clone();
         loops.uv[0][2 * count + 1 - k] = second[k].1.clone();
         loops.xyz[0][2 * count + 1 - k] = second[k].2.clone();
-        boundary.points.entry(edges[0].index as usize).or_default().push(first[k].2.clone());
-        boundary.points.entry(edges[2].index as usize).or_default().push(second[k].2.clone());
+        boundary
+            .points
+            .entry(edges[0].index as usize)
+            .or_default()
+            .push(first[k].2.clone());
+        boundary
+            .points
+            .entry(edges[2].index as usize)
+            .or_default()
+            .push(second[k].2.clone());
     }
 
     for k in 0..count {
@@ -2261,11 +2327,19 @@ fn ruled_side(srf: &NurbsSurface, crv: &NurbsCurve) -> i32 {
     }
 
     if (c0[1] - c1[1]).abs() <= tolerance_v && (c0[0] - c1[0]).abs() > tolerance_u {
-        return if (c0[1] - dv0).abs() <= tolerance_v { 0 } else { 1 };
+        return if (c0[1] - dv0).abs() <= tolerance_v {
+            0
+        } else {
+            1
+        };
     }
 
     if (c0[0] - c1[0]).abs() <= tolerance_u && (c0[1] - c1[1]).abs() > tolerance_v {
-        return if (c0[0] - du0).abs() <= tolerance_u { 2 } else { 3 };
+        return if (c0[0] - du0).abs() <= tolerance_u {
+            2
+        } else {
+            3
+        };
     }
 
     -1
@@ -2359,7 +2433,9 @@ fn ruled_steps(spans: &[f64], counts: &[usize]) -> Vec<f64> {
 
     for span in 0..spans.len() - 1 {
         for k in 0..counts[span] {
-            steps.push(spans[span] + (spans[span + 1] - spans[span]) * k as f64 / counts[span] as f64);
+            steps.push(
+                spans[span] + (spans[span + 1] - spans[span]) * k as f64 / counts[span] as f64,
+            );
         }
     }
 
@@ -2369,7 +2445,14 @@ fn ruled_steps(spans: &[f64], counts: &[usize]) -> Vec<f64> {
 }
 
 /// Phase 1: how far one span of a ruled face at count equal steps is from the quality asked, on whichever loop and step is worse: the sag of a chord over the tolerance or the turn of the normals over the angle, as a share of what is allowed; zero or below when the span passes, the normals taken just inside a step so a kink at a station is not a turn
-fn ruled_excess(srf: &NurbsSurface, u0: f64, u1: f64, count: usize, cosine: f64, tolerance: f64) -> f64 {
+fn ruled_excess(
+    srf: &NurbsSurface,
+    u0: f64,
+    u1: f64,
+    count: usize,
+    cosine: f64,
+    tolerance: f64,
+) -> f64 {
     let (dv0, dv1) = srf.domain(1).unwrap_or((0.0, 1.0));
     let mut excess = -1.0f64;
 
@@ -2382,8 +2465,14 @@ fn ruled_excess(srf: &NurbsSurface, u0: f64, u1: f64, count: usize, cosine: f64,
             let z = srf.point_at(ub, v).unwrap_or_default();
             let middle = srf.point_at((ua + ub) * 0.5, v).unwrap_or_default();
             let sag = middle.distance(&(&a + (&z - &a) * 0.5), None);
-            let dot = srf.normal_at(ua + inside, v).dot(&srf.normal_at(ub - inside, v));
-            let sag_excess = if tolerance > 0.0 { sag / tolerance - 1.0 } else { -1.0 };
+            let dot = srf
+                .normal_at(ua + inside, v)
+                .dot(&srf.normal_at(ub - inside, v));
+            let sag_excess = if tolerance > 0.0 {
+                sag / tolerance - 1.0
+            } else {
+                -1.0
+            };
             excess = excess.max(sag_excess).max((cosine - dot) / (1.0 - cosine));
         }
     }
@@ -2392,17 +2481,37 @@ fn ruled_excess(srf: &NurbsSurface, u0: f64, u1: f64, count: usize, cosine: f64,
 }
 
 /// Phase 1: the steps of every span of a ruled face: one, doubled while the span is coarser than the chord tolerance measured against the whole BRep or the angle allows and doubling still brings it closer, so a kink or a fold inside a span does not ask for ever more steps; 4096 stations at most over all spans
-fn ruled_counts(srf: &NurbsSurface, spans: &[f64], scale: f64, angle: f64, chord: f64) -> Vec<usize> {
+fn ruled_counts(
+    srf: &NurbsSurface,
+    spans: &[f64],
+    scale: f64,
+    angle: f64,
+    chord: f64,
+) -> Vec<usize> {
     let tolerance = scale * chord;
     let cosine = (angle.clamp(0.1, 179.0) * PI / 180.0).cos();
     let mut counts = vec![1usize; spans.len() - 1];
     let mut total = counts.len();
 
     for span in 0..spans.len() - 1 {
-        let mut excess = ruled_excess(srf, spans[span], spans[span + 1], counts[span], cosine, tolerance);
+        let mut excess = ruled_excess(
+            srf,
+            spans[span],
+            spans[span + 1],
+            counts[span],
+            cosine,
+            tolerance,
+        );
 
         while excess > 0.0 && total + counts[span] <= 4096 {
-            let finer = ruled_excess(srf, spans[span], spans[span + 1], 2 * counts[span], cosine, tolerance);
+            let finer = ruled_excess(
+                srf,
+                spans[span],
+                spans[span + 1],
+                2 * counts[span],
+                cosine,
+                tolerance,
+            );
 
             if finer > 0.75 * excess {
                 break;
@@ -2418,14 +2527,20 @@ fn ruled_counts(srf: &NurbsSurface, spans: &[f64], scale: f64, angle: f64, chord
 }
 
 /// Phase 1: the canonical points of a loop of a ruled face lifted onto the face along the loop's own iso curve, each the parameter of its closest point there searched between the neighbours of its nearest sample of the curve, in the loop's traversal order with equal parameters kept once; empty while nobody has sampled the edge
-fn ruled_lift(b: &BRep, fi: usize, er: &BRepRef, boundary: &EdgeBoundary) -> Vec<(f64, Point, Point)> {
+fn ruled_lift(
+    b: &BRep,
+    fi: usize,
+    er: &BRepRef,
+    boundary: &EdgeBoundary,
+) -> Vec<(f64, Point, Point)> {
     let mut samples: Vec<(f64, Point, Point)> = Vec::new();
 
     let Some(points) = boundary.points.get(&(er.index as usize)) else {
         return samples;
     };
-    if !crate::display_budget::charge(points.len().saturating_mul(2)) { return Vec::new(); }
-
+    if !crate::display_budget::charge(points.len().saturating_mul(2)) {
+        return Vec::new();
+    }
 
     let srf = &b.m_surfaces[b.m_faces[fi].surface_index as usize];
     let ci = b.pcurve_index(er.index as usize, fi, er.orientation);
@@ -2436,7 +2551,9 @@ fn ruled_lift(b: &BRep, fi: usize, er: &BRepRef, boundary: &EdgeBoundary) -> Vec
     let (t0, t1) = crv.domain();
     let (du0, du1) = srf.domain(0).unwrap_or((0.0, 1.0));
     let count = (iso.cv_count() * 10).max(50);
-    let table: Vec<Point> = (0..=count).map(|k| iso.point_at(du0 + (du1 - du0) * k as f64 / count as f64)).collect();
+    let table: Vec<Point> = (0..=count)
+        .map(|k| iso.point_at(du0 + (du1 - du0) * k as f64 / count as f64))
+        .collect();
 
     for p in points {
         let mut nearest = 0;
@@ -2468,8 +2585,15 @@ fn ruled_stations(
     second: &[(f64, Point, Point)],
     tolerance: f64,
 ) -> Vec<f64> {
-    let count = counts.iter().copied().fold(1usize, usize::saturating_add).saturating_add(first.len()).saturating_add(second.len());
-    if !crate::display_budget::charge(count) { return Vec::new(); }
+    let count = counts
+        .iter()
+        .copied()
+        .fold(1usize, usize::saturating_add)
+        .saturating_add(first.len())
+        .saturating_add(second.len());
+    if !crate::display_budget::charge(count) {
+        return Vec::new();
+    }
     let mut stations: Vec<f64> = ruled_steps(spans, counts);
 
     for lifted in [first, second] {
@@ -2517,10 +2641,16 @@ fn ruled_extend(
         let mut p = srf.point_at(u, v).unwrap_or_default();
 
         if (u - du0).abs() <= tolerance || (u - du1).abs() <= tolerance {
-            p = if p.distance(&ends.0, None) <= p.distance(&ends.1, None) { ends.0.clone() } else { ends.1.clone() };
+            p = if p.distance(&ends.0, None) <= p.distance(&ends.1, None) {
+                ends.0.clone()
+            } else {
+                ends.1.clone()
+            };
         }
 
-        if !crate::display_budget::charge(2) { return added; }
+        if !crate::display_budget::charge(2) {
+            return added;
+        }
         points.push(p);
         added = true;
     }
@@ -2529,14 +2659,27 @@ fn ruled_extend(
 }
 
 /// Phase 1: the rulings of every ruled face agreed with its neighbours: each pass every face asks its stations of both loops and adds the points a loop lacks, which the faces sharing that edge pick up on the next pass, until no face adds a point or sixteen passes are spent
-fn ruled_boundaries(b: &BRep, face_ruled: &[i32], boundary: &mut EdgeBoundary, scale: f64, angle: f64, chord: f64) {
+fn ruled_boundaries(
+    b: &BRep,
+    face_ruled: &[i32],
+    boundary: &mut EdgeBoundary,
+    scale: f64,
+    angle: f64,
+    chord: f64,
+) {
     let mut spans: Vec<Vec<f64>> = vec![Vec::new(); face_ruled.len()];
     let mut counts: Vec<Vec<usize>> = vec![Vec::new(); face_ruled.len()];
 
     for fi in 0..face_ruled.len() {
         if face_ruled[fi] >= 0 {
             spans[fi] = ruled_spans(&b.m_surfaces[b.m_faces[fi].surface_index as usize]);
-            counts[fi] = ruled_counts(&b.m_surfaces[b.m_faces[fi].surface_index as usize], &spans[fi], scale, angle, chord);
+            counts[fi] = ruled_counts(
+                &b.m_surfaces[b.m_faces[fi].surface_index as usize],
+                &spans[fi],
+                scale,
+                angle,
+                chord,
+            );
         }
     }
 
@@ -2559,9 +2702,25 @@ fn ruled_boundaries(b: &BRep, face_ruled: &[i32], boundary: &mut EdgeBoundary, s
             let ends_first = edge_ends(b, edges[0].index as usize);
             let ends_second = edge_ends(b, edges[2].index as usize);
             let points_first = boundary.points.entry(edges[0].index as usize).or_default();
-            changed = ruled_extend(srf, dv0, &stations, &first, tolerance, &ends_first, points_first) || changed;
+            changed = ruled_extend(
+                srf,
+                dv0,
+                &stations,
+                &first,
+                tolerance,
+                &ends_first,
+                points_first,
+            ) || changed;
             let points_second = boundary.points.entry(edges[2].index as usize).or_default();
-            changed = ruled_extend(srf, dv1, &stations, &second, tolerance, &ends_second, points_second) || changed;
+            changed = ruled_extend(
+                srf,
+                dv1,
+                &stations,
+                &second,
+                tolerance,
+                &ends_second,
+                points_second,
+            ) || changed;
         }
 
         if !changed {
@@ -2585,10 +2744,16 @@ fn ruled_mesh(b: &BRep, fi: usize, shift: usize, boundary: &mut EdgeBoundary) ->
     let first = ruled_lift(b, fi, &edges[0], boundary);
     let mut second = ruled_lift(b, fi, &edges[2], boundary);
     let n = first.len();
-    if !crate::display_budget::charge(n.saturating_mul(6)) { return Mesh::new(); }
+    if !crate::display_budget::charge(n.saturating_mul(6)) {
+        return Mesh::new();
+    }
 
     // the second loop numbered on round the loop, from the ruling where the first ends, so the rulings tag their own two ends
-    if n >= 2 && second.len() == n && (first[n - 1].1[0] - second[0].1[0]).abs() > (first[n - 1].1[0] - second[n - 1].1[0]).abs() {
+    if n >= 2
+        && second.len() == n
+        && (first[n - 1].1[0] - second[0].1[0]).abs()
+            > (first[n - 1].1[0] - second[n - 1].1[0]).abs()
+    {
         second.reverse();
     }
 
@@ -2611,7 +2776,9 @@ fn ruled_mesh(b: &BRep, fi: usize, shift: usize, boundary: &mut EdgeBoundary) ->
     for k in [1, 3] {
         if !boundary.points.contains_key(&(edges[k].index as usize)) {
             let ends = edge_ends(b, edges[k].index as usize);
-            boundary.points.insert(edges[k].index as usize, vec![ends.0, ends.1]);
+            boundary
+                .points
+                .insert(edges[k].index as usize, vec![ends.0, ends.1]);
         }
     }
 
@@ -2631,14 +2798,22 @@ fn ruled_mesh(b: &BRep, fi: usize, shift: usize, boundary: &mut EdgeBoundary) ->
     }
 
     for k in 0..n - 1 {
-        let quad = [bottom[bottom_order[k]], bottom[bottom_order[k + 1]], top[top_order[k + 1]], top[top_order[k]]];
+        let quad = [
+            bottom[bottom_order[k]],
+            bottom[bottom_order[k + 1]],
+            top[top_order[k + 1]],
+            top[top_order[k]],
+        ];
 
         for triangle in [[quad[0], quad[1], quad[2]], [quad[0], quad[2], quad[3]]] {
             let a = mesh.vertex[&triangle[0]].position();
             let c = mesh.vertex[&triangle[1]].position();
             let d = mesh.vertex[&triangle[2]].position();
 
-            if !same_boundary_point(&a, &c) && !same_boundary_point(&c, &d) && !same_boundary_point(&d, &a) {
+            if !same_boundary_point(&a, &c)
+                && !same_boundary_point(&c, &d)
+                && !same_boundary_point(&d, &a)
+            {
                 mesh.add_face(vec![triangle[0], triangle[1], triangle[2]], None);
             }
         }
@@ -3841,39 +4016,95 @@ impl BRep {
     }
 
     #[cfg(feature = "viewer-display")]
-    pub fn face_meshes_q_bounded(&self, quality: (f64, f64), vertex_budget: usize) -> Option<Vec<Mesh>> {
-        if !quality.0.is_finite() || !quality.1.is_finite() || quality.0 <= 0.0 || quality.1 <= 0.0 {
+    pub fn face_meshes_q_bounded(
+        &self,
+        quality: (f64, f64),
+        vertex_budget: usize,
+    ) -> Option<Vec<Mesh>> {
+        if !quality.0.is_finite() || !quality.1.is_finite() || quality.0 <= 0.0 || quality.1 <= 0.0
+        {
             return None;
         }
-        if self.m_surfaces.iter().any(|surface| surface.m_mesh.is_some()) { return None; }
-        if self.m_curves_3d.iter().chain(&self.m_curves_2d).any(|curve| {
-            !(2..=16).contains(&curve.m_order) || curve.m_cv_count < curve.m_order
-                || (0..curve.m_cv_count).any(|i| curve.get_cv_4d(i).is_none_or(|(x,y,z,w)| {
-                    ![x,y,z,w].into_iter().all(f64::is_finite) || w <= 1e-14
-                }))
-        }) || self.m_surfaces.iter().any(|surface| {
-            (0..2).any(|axis| !(2..=16).contains(&surface.m_order[axis]) || surface.m_cv_count[axis] < surface.m_order[axis])
-                || (0..surface.cv_count(0)).any(|i| (0..surface.cv_count(1)).any(|j| surface.get_cv_4d(i,j).is_none_or(|(x,y,z,w)| {
-                    ![x,y,z,w].into_iter().all(f64::is_finite) || w <= 1e-14
-                })))
-        }) { return None; }
+        if self
+            .m_surfaces
+            .iter()
+            .any(|surface| surface.m_mesh.is_some())
+        {
+            return None;
+        }
+        if self
+            .m_curves_3d
+            .iter()
+            .chain(&self.m_curves_2d)
+            .any(|curve| {
+                !(2..=16).contains(&curve.m_order)
+                    || curve.m_cv_count < curve.m_order
+                    || (0..curve.m_cv_count).any(|i| {
+                        curve.get_cv_4d(i).is_none_or(|(x, y, z, w)| {
+                            ![x, y, z, w].into_iter().all(f64::is_finite) || w <= 1e-14
+                        })
+                    })
+            })
+            || self.m_surfaces.iter().any(|surface| {
+                (0..2).any(|axis| {
+                    !(2..=16).contains(&surface.m_order[axis])
+                        || surface.m_cv_count[axis] < surface.m_order[axis]
+                }) || (0..surface.cv_count(0)).any(|i| {
+                    (0..surface.cv_count(1)).any(|j| {
+                        surface.get_cv_4d(i, j).is_none_or(|(x, y, z, w)| {
+                            ![x, y, z, w].into_iter().all(f64::is_finite) || w <= 1e-14
+                        })
+                    })
+                })
+            })
+        {
+            return None;
+        }
 
         // Boundary samples clone endpoint metadata as well as positions.
         if self.m_vertices.iter().any(|vertex| {
             let point = &vertex.point;
             let color = &point.pointcolor;
-            point.name.len().saturating_add(color.name.len())
-                .saturating_add(if point.has_guid() { point.guid().len() } else { 0 })
-                .saturating_add(if color.has_guid() { color.guid().len() } else { 0 }) > 256
-        }) { return None; }
+            point
+                .name
+                .len()
+                .saturating_add(color.name.len())
+                .saturating_add(if point.has_guid() {
+                    point.guid().len()
+                } else {
+                    0
+                })
+                .saturating_add(if color.has_guid() {
+                    color.guid().len()
+                } else {
+                    0
+                })
+                > 256
+        }) {
+            return None;
+        }
         let _budget = crate::display_budget::Budget::new(vertex_budget);
-        let controls = self.m_surfaces.iter().map(|surface| surface.m_cv.len())
-            .chain(self.m_curves_2d.iter().chain(&self.m_curves_3d).map(|curve| curve.m_cv.len()))
+        let controls = self
+            .m_surfaces
+            .iter()
+            .map(|surface| surface.m_cv.len())
+            .chain(
+                self.m_curves_2d
+                    .iter()
+                    .chain(&self.m_curves_3d)
+                    .map(|curve| curve.m_cv.len()),
+            )
             .fold(0usize, usize::saturating_add);
-        if !crate::display_budget::charge(self.m_faces.len()) || !crate::display_budget::charge_scalars(controls) { return None; }
+        if !crate::display_budget::charge(self.m_faces.len())
+            || !crate::display_budget::charge_scalars(controls)
+        {
+            return None;
+        }
         let meshes = self.face_meshes_q(Some(quality));
-        (!crate::display_budget::failed() && meshes.len() == self.m_faces.len()
-            && meshes.iter().all(|mesh| !mesh.face.is_empty())).then_some(meshes)
+        (!crate::display_budget::failed()
+            && meshes.len() == self.m_faces.len()
+            && meshes.iter().all(|mesh| !mesh.face.is_empty()))
+        .then_some(meshes)
     }
 
     /// As face_meshes with a tessellation-quality override (max_angle_deg, chord_factor) when given
@@ -3889,7 +4120,9 @@ impl BRep {
         let mut boundary = EdgeBoundary::default();
 
         for fi in 0..nf {
-            if crate::display_budget::failed() { return Vec::new(); }
+            if crate::display_budget::failed() {
+                return Vec::new();
+            }
             face_strip[fi] = strip_face(self, fi, &boundary);
             fmesh.push(Mesh::new());
 
@@ -3899,7 +4132,9 @@ impl BRep {
         }
 
         for fi in 0..nf {
-            if crate::display_budget::failed() { return Vec::new(); }
+            if crate::display_budget::failed() {
+                return Vec::new();
+            }
             if !face_strip[fi] {
                 face_ruled[fi] = ruled_face(self, fi);
             }
@@ -3908,7 +4143,9 @@ impl BRep {
         ruled_boundaries(self, &face_ruled, &mut boundary, scale, angle, chord);
 
         for fi in 0..nf {
-            if crate::display_budget::failed() { return Vec::new(); }
+            if crate::display_budget::failed() {
+                return Vec::new();
+            }
             if face_ruled[fi] < 0 {
                 continue;
             }
@@ -3920,21 +4157,30 @@ impl BRep {
             }
         }
 
-        if crate::display_budget::failed() { return Vec::new(); }
+        if crate::display_budget::failed() {
+            return Vec::new();
+        }
         for (fi, direct) in face_direct.iter_mut().enumerate() {
             *direct = !face_strip[fi] && face_ruled[fi] < 0 && direct_face(self, fi);
         }
 
         for fi in 0..nf {
-            if crate::display_budget::failed() { return Vec::new(); }
+            if crate::display_budget::failed() {
+                return Vec::new();
+            }
             if !face_direct[fi] {
                 continue;
             }
 
             let srf = &self.m_surfaces[self.m_faces[fi].surface_index as usize];
             fmesh[fi] = match quality {
-                Some((a, c)) => RemeshNurbsSurfaceGrid::from_u_v_q(srf, 0, 0, a,
-                    crate::display_budget::relative_chord(c, scale, bbox_diagonal(srf))),
+                Some((a, c)) => RemeshNurbsSurfaceGrid::from_u_v_q(
+                    srf,
+                    0,
+                    0,
+                    a,
+                    crate::display_budget::relative_chord(c, scale, bbox_diagonal(srf)),
+                ),
                 None => srf.mesh(),
             };
             snap_grid_corners(self, fi, &mut fmesh[fi]);
@@ -3952,14 +4198,18 @@ impl BRep {
         );
 
         for fi in 0..nf {
-            if crate::display_budget::failed() { return Vec::new(); }
+            if crate::display_budget::failed() {
+                return Vec::new();
+            }
             if rebuild_grid[fi] {
                 face_direct[fi] = false;
             }
         }
 
         for fi in 0..nf {
-            if crate::display_budget::failed() { return Vec::new(); }
+            if crate::display_budget::failed() {
+                return Vec::new();
+            }
             if face_strip[fi] || face_ruled[fi] >= 0 || face_direct[fi] {
                 continue;
             }
@@ -3973,7 +4223,16 @@ impl BRep {
 
             let mut uses: Vec<(usize, usize, usize, usize)> = Vec::new();
 
-            if !trim_loops(self, fi, &mut boundary, scale, angle, chord, &mut loops, &mut uses) {
+            if !trim_loops(
+                self,
+                fi,
+                &mut boundary,
+                scale,
+                angle,
+                chord,
+                &mut loops,
+                &mut uses,
+            ) {
                 continue;
             }
 
@@ -3982,13 +4241,19 @@ impl BRep {
             } else {
                 let mut ts = NurbsSurfaceTrimmed::new();
                 ts.m_surface = srf.clone();
-                fmesh[fi] = ts.mesh_loops(&loops, angle, crate::display_budget::relative_chord(chord, scale, bbox_diagonal(srf)));
+                fmesh[fi] = ts.mesh_loops(
+                    &loops,
+                    angle,
+                    crate::display_budget::relative_chord(chord, scale, bbox_diagonal(srf)),
+                );
             }
 
             tag_edge_uses(&mut fmesh[fi], &loops, &uses);
         }
 
-        if crate::display_budget::failed() { return Vec::new(); }
+        if crate::display_budget::failed() {
+            return Vec::new();
+        }
         flip_reversed_faces(self, &mut fmesh);
 
         fmesh

@@ -1,7 +1,7 @@
-use crate::mini_test::TestResult;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
 
 pub fn run_remesh_nurbssurface_adaptive_constructor() -> TestResult {
     MINI_TEST!("Constructor", {

@@ -371,12 +371,12 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
     use crate::file_encoders_test::*;
     use crate::file_obj_test::*;
     use crate::file_step_test::*;
+    use crate::file_xyz_test::*;
     use crate::graph_test::*;
     use crate::history_test::*;
     use crate::instance_ref_test::*;
     use crate::interaction_test::*;
     use crate::intersection_test::*;
-    use crate::file_xyz_test::*;
     use crate::line_test::*;
     use crate::matrix_test::*;
     use crate::mesh_test::*;
@@ -397,12 +397,13 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
     use crate::remesh_nurbssurface_grid_test::*;
     use crate::session_config_test::*;
     use crate::session_test::*;
-    use crate::split_test::*;
     use crate::spatial_aabbtree_test::*;
     use crate::spatial_bvh_test::*;
     use crate::spatial_kdtree_test::*;
     use crate::spatial_octree_test::*;
     use crate::spatial_rtree_test::*;
+    use crate::split_test::*;
+    use crate::text_test::*;
     use crate::tolerance_test::*;
     use crate::tree_test::*;
     use crate::vector_test::*;
@@ -1909,6 +1910,32 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             group: "Xform",
             name: "Protobuf Roundtrip",
             func: run_xform_protobuf_roundtrip,
+        },
+        // Text tests
+        RegisteredTest {
+            group: "Text",
+            name: "Constructor",
+            func: run_text_constructor,
+        },
+        RegisteredTest {
+            group: "Text",
+            name: "Json",
+            func: run_text_json,
+        },
+        RegisteredTest {
+            group: "Text",
+            name: "Protobuf",
+            func: run_text_protobuf,
+        },
+        RegisteredTest {
+            group: "Text",
+            name: "Component",
+            func: run_text_component,
+        },
+        RegisteredTest {
+            group: "Session",
+            name: "Animate Xform",
+            func: run_session_animate_xform,
         },
         // Mesh tests
         RegisteredTest {

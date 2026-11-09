@@ -1,14 +1,14 @@
-use crate::mini_test::TestResult;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
 
 pub fn run_remesh_cdt_triangulate() -> TestResult {
     MINI_TEST!("Triangulate", {
-        use crate::remesh_cdt::RemeshCDT;
         use crate::Mesh;
         use crate::Point;
         use crate::Polyline;
+        use crate::remesh_cdt::RemeshCDT;
 
         let border = Polyline::new(vec![
             Point::new(0.0, 0.0, 0.0),
@@ -50,9 +50,9 @@ pub fn run_remesh_cdt_triangulate() -> TestResult {
 
 pub fn run_remesh_cdt_triangle() -> TestResult {
     MINI_TEST!("Triangle", {
-        use crate::remesh_cdt::RemeshCDT;
         use crate::Point;
         use crate::Polyline;
+        use crate::remesh_cdt::RemeshCDT;
 
         let polyline = Polyline::new(vec![
             Point::new(0.0, 0.0, 0.0),
@@ -67,9 +67,9 @@ pub fn run_remesh_cdt_triangle() -> TestResult {
 
 pub fn run_remesh_cdt_rectangle() -> TestResult {
     MINI_TEST!("Rectangle", {
-        use crate::remesh_cdt::RemeshCDT;
         use crate::Point;
         use crate::Polyline;
+        use crate::remesh_cdt::RemeshCDT;
 
         let polyline = Polyline::new(vec![
             Point::new(3.0, 0.0, 0.0),
@@ -85,9 +85,9 @@ pub fn run_remesh_cdt_rectangle() -> TestResult {
 
 pub fn run_remesh_cdt_l_shape() -> TestResult {
     MINI_TEST!("L Shape", {
-        use crate::remesh_cdt::RemeshCDT;
         use crate::Point;
         use crate::Polyline;
+        use crate::remesh_cdt::RemeshCDT;
 
         let polyline = Polyline::new(vec![
             Point::new(7.0, 0.0, 0.0),
@@ -105,9 +105,9 @@ pub fn run_remesh_cdt_l_shape() -> TestResult {
 
 pub fn run_remesh_cdt_u_shape() -> TestResult {
     MINI_TEST!("U Shape", {
-        use crate::remesh_cdt::RemeshCDT;
         use crate::Point;
         use crate::Polyline;
+        use crate::remesh_cdt::RemeshCDT;
 
         let polyline = Polyline::new(vec![
             Point::new(25.0, 0.0, 0.0),
@@ -127,9 +127,9 @@ pub fn run_remesh_cdt_u_shape() -> TestResult {
 
 pub fn run_remesh_cdt_octagon() -> TestResult {
     MINI_TEST!("Octagon", {
-        use crate::remesh_cdt::RemeshCDT;
         use crate::Polyline;
         use crate::Vector;
+        use crate::remesh_cdt::RemeshCDT;
 
         let mut polyline = Polyline::from_sides(8, 1.5, false);
         polyline += &Vector::new(14.0, 1.5, 0.0);
@@ -141,9 +141,9 @@ pub fn run_remesh_cdt_octagon() -> TestResult {
 
 pub fn run_remesh_cdt_rectangle_with_rectangle_hole() -> TestResult {
     MINI_TEST!("Rectangle With Rectangle Hole", {
-        use crate::remesh_cdt::RemeshCDT;
         use crate::Point;
         use crate::Polyline;
+        use crate::remesh_cdt::RemeshCDT;
 
         let border = Polyline::new(vec![
             Point::new(0.0, 0.0, 0.0),
@@ -165,9 +165,9 @@ pub fn run_remesh_cdt_rectangle_with_rectangle_hole() -> TestResult {
 
 pub fn run_remesh_cdt_duplicate_vertices() -> TestResult {
     MINI_TEST!("Duplicate Vertices", {
-        use crate::remesh_cdt::RemeshCDT;
         use crate::Point;
         use crate::Polyline;
+        use crate::remesh_cdt::RemeshCDT;
 
         let polyline = Polyline::new(vec![
             Point::new(33.0, 0.0, 0.0),
@@ -185,9 +185,9 @@ pub fn run_remesh_cdt_duplicate_vertices() -> TestResult {
 
 pub fn run_remesh_cdt_tilted_rectangle_with_rectangle_hole() -> TestResult {
     MINI_TEST!("Tilted Rectangle With Rectangle Hole", {
-        use crate::remesh_cdt::RemeshCDT;
         use crate::Point;
         use crate::Polyline;
+        use crate::remesh_cdt::RemeshCDT;
 
         let border = Polyline::new(vec![
             Point::new(55.0, 0.0, 0.0),
@@ -209,9 +209,9 @@ pub fn run_remesh_cdt_tilted_rectangle_with_rectangle_hole() -> TestResult {
 
 pub fn run_remesh_cdt_irregular_tilted_polyline() -> TestResult {
     MINI_TEST!("Irregular Tilted Polyline", {
-        use crate::remesh_cdt::RemeshCDT;
         use crate::Point;
         use crate::Polyline;
+        use crate::remesh_cdt::RemeshCDT;
 
         let border = vec![
             Point::new(125.390575, 14.236865, -16.468853),
@@ -271,9 +271,9 @@ pub fn run_remesh_cdt_irregular_tilted_polyline() -> TestResult {
 
 pub fn run_remesh_cdt_irregular_tilted_polyline_with_holes() -> TestResult {
     MINI_TEST!("Irregular Tilted Polyline With Holes", {
-        use crate::remesh_cdt::RemeshCDT;
         use crate::Point;
         use crate::Polyline;
+        use crate::remesh_cdt::RemeshCDT;
 
         let border = vec![
             Point::new(80.805571, 2.103432, 0.0),
@@ -399,9 +399,9 @@ pub fn run_remesh_cdt_irregular_tilted_polyline_with_holes() -> TestResult {
 
 pub fn run_remesh_cdt_degenerate_hole_keeps_flat_indices() -> TestResult {
     MINI_TEST!("Degenerate Hole Keeps Flat Indices", {
-        use crate::remesh_cdt::RemeshCDT;
         use crate::Point;
         use crate::Polyline;
+        use crate::remesh_cdt::RemeshCDT;
 
         let border = Polyline::new(vec![
             Point::new(0.0, 0.0, 0.0),
@@ -433,9 +433,9 @@ pub fn run_remesh_cdt_degenerate_hole_keeps_flat_indices() -> TestResult {
 
 pub fn run_remesh_cdt_large_coordinates() -> TestResult {
     MINI_TEST!("Large Coordinates", {
-        use crate::remesh_cdt::RemeshCDT;
         use crate::Point;
         use crate::Polyline;
+        use crate::remesh_cdt::RemeshCDT;
 
         let border = Polyline::new(vec![
             Point::new(1e13, 1e13, 0.0),
@@ -451,8 +451,8 @@ pub fn run_remesh_cdt_large_coordinates() -> TestResult {
 
 pub fn run_remesh_cdt_collinear_boundary_vertices() -> TestResult {
     MINI_TEST!("Collinear Boundary Vertices", {
-        use crate::remesh_cdt::cdt_triangulate;
         use crate::Point;
+        use crate::remesh_cdt::cdt_triangulate;
 
         let border = vec![
             Point::new(0.0, 0.0, 0.0),
@@ -484,7 +484,11 @@ pub fn run_remesh_cdt_collinear_boundary_vertices() -> TestResult {
 fn run_side(a: [f64; 2], b: [f64; 2], inner: usize, out: &mut Vec<crate::Point>) {
     for k in 0..=inner {
         let t = k as f64 / (inner + 1) as f64;
-        out.push(crate::Point::new(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, 0.0));
+        out.push(crate::Point::new(
+            a[0] + (b[0] - a[0]) * t,
+            a[1] + (b[1] - a[1]) * t,
+            0.0,
+        ));
     }
 }
 
@@ -557,7 +561,10 @@ pub fn run_remesh_cdt_collinear_boundary_runs() -> TestResult {
                     Point::new(0.0, 10.0, 0.0),
                 ];
 
-                if !run_covers(&border, &[]) || !run_covers(&plain, &[hole.clone()]) || !run_covers(&border, &[hole]) {
+                if !run_covers(&border, &[])
+                    || !run_covers(&plain, &[hole.clone()])
+                    || !run_covers(&border, &[hole])
+                {
                     failures += 1;
                 }
             }
@@ -569,9 +576,9 @@ pub fn run_remesh_cdt_collinear_boundary_runs() -> TestResult {
 
 pub fn run_remesh_cdt_plate_four_holes() -> TestResult {
     MINI_TEST!("Plate Four Holes", {
-        use crate::remesh_cdt::RemeshCDT;
         use crate::Point;
         use crate::Polyline;
+        use crate::remesh_cdt::RemeshCDT;
 
         let border = vec![
             Point::new(734.392021, -1906.59468, 1101.588031),

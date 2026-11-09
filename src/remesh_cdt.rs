@@ -161,11 +161,7 @@ fn inside_path64(p: [i64; 2], poly: &[[i64; 2]]) -> bool {
 
 /// Index before i on a ring of n.
 fn prev_index(i: usize, n: usize) -> usize {
-    if i == 0 {
-        n - 1
-    } else {
-        i - 1
-    }
+    if i == 0 { n - 1 } else { i - 1 }
 }
 
 /// Index after i on a ring of n.

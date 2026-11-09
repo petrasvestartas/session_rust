@@ -46,7 +46,7 @@ pub struct PointCloud {
     _point_ids: Vec<u32>, // Stable point ids parallel to the points.
     pub name: String, // Cloud name.
     #[serde(default = "crate::file_encoders::default_visible")]
-    pub is_visible: bool,// Whether a viewer draws it.
+    pub is_visible: bool, // Whether a viewer draws it.
     #[serde(default)]
     pub is_locked: bool, // Whether a viewer keeps it from moving.
     #[serde(default = "PointCloud::default_point_size")]

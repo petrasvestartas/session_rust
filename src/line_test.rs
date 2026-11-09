@@ -1,8 +1,8 @@
-use crate::mini_test::TestResult;
-use crate::tolerance::TOLERANCE;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::TOLERANCE;
 
 pub fn run_line_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -90,7 +90,10 @@ pub fn run_line_constructor() -> TestResult {
             x0 == 10.0 && y0 == 20.0 && z0 == 30.0 && x1 == 40.0 && y1 == 50.0 && z1 == 60.0
         );
         MINI_CHECK!(lstr == "10.000000, 20.000000, 30.000000, 40.000000, 50.000000, 60.000000");
-        MINI_CHECK!(lrepr == "Line(my_line, 10.000000, 20.000000, 30.000000, 40.000000, 50.000000, 60.000000, Color(black, 0.0, 0.0, 0.0, 1.0), 1.000000)");
+        MINI_CHECK!(
+            lrepr
+                == "Line(my_line, 10.000000, 20.000000, 30.000000, 40.000000, 50.000000, 60.000000, Color(black, 0.0, 0.0, 0.0, 1.0), 1.000000)"
+        );
         MINI_CHECK!(lcopy == line && lcopy.guid() != line.guid());
         MINI_CHECK!(lother == line && lneg != line);
         MINI_CHECK!(lmult[0] == 20.0 && lmult[3] == 80.0);

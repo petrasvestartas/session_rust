@@ -1,3 +1,7 @@
+use crate::BRep;
+use crate::Mesh;
+use crate::NurbsCurve;
+use crate::NurbsSurface;
 use crate::color::Color;
 use crate::graph::Edge;
 use crate::graph::Vertex;
@@ -7,10 +11,6 @@ use crate::session::Item;
 use crate::session::Session;
 use crate::tree::TreeNode;
 use crate::xform::Xform;
-use crate::BRep;
-use crate::Mesh;
-use crate::NurbsCurve;
-use crate::NurbsSurface;
 use std::cell::Cell;
 use std::cell::RefCell;
 use std::collections::BTreeMap;

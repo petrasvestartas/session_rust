@@ -1,5 +1,5 @@
-use crate::tolerance::Tolerance;
 use crate::Polyline;
+use crate::tolerance::Tolerance;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Sweep structures
@@ -498,11 +498,7 @@ fn v_winding_step(pt: BIVec2, a: BIVec2, b: BIVec2) -> i32 {
         return if b.y > pt.y && cross > 0 { 1 } else { 0 };
     }
 
-    if b.y <= pt.y && cross < 0 {
-        -1
-    } else {
-        0
-    }
+    if b.y <= pt.y && cross < 0 { -1 } else { 0 }
 }
 
 fn pip_i(pt: BIVec2, poly: &[BIVec2]) -> bool {
@@ -693,11 +689,7 @@ fn v_get_curr_y_maxima(sc: &VattiScratch, e: usize) -> Option<usize> {
         }
     }
 
-    if v_is_maxima_v(sc, r) {
-        Some(r)
-    } else {
-        None
-    }
+    if v_is_maxima_v(sc, r) { Some(r) } else { None }
 }
 
 fn v_get_prev_hot(sc: &VattiScratch, e: usize) -> Option<usize> {
@@ -947,11 +939,7 @@ fn v_set_wind_count(sc: &mut VattiScratch, e: usize) {
 
         if wc * wd < 0 {
             sc.act_pool[e].wind_cnt = if wc.abs() > 1 {
-                if wd * ewd < 0 {
-                    wc
-                } else {
-                    wc + ewd
-                }
+                if wd * ewd < 0 { wc } else { wc + ewd }
             } else {
                 ewd
             };
@@ -988,11 +976,7 @@ fn v_is_contributing(sc: &VattiScratch, e: usize, cliptype: i32) -> bool {
     } else {
         let r = wc2 == 0;
 
-        if v_polytype(sc, e) == 0 {
-            r
-        } else {
-            !r
-        }
+        if v_polytype(sc, e) == 0 { r } else { !r }
     }
 }
 

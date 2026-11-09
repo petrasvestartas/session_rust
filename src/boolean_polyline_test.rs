@@ -1,8 +1,8 @@
-use crate::mini_test::TestResult;
-use crate::tolerance::PI;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::PI;
 
 const PI2: f64 = 2.0 * PI;
 

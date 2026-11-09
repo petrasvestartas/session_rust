@@ -1,13 +1,13 @@
-use crate::tolerance::Tolerance;
 use crate::Line;
 use crate::Plane;
 use crate::Point;
 use crate::Polyline;
 use crate::Vector;
-use serde::ser::SerializeMap;
+use crate::tolerance::Tolerance;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serializer;
+use serde::ser::SerializeMap;
 use std::fmt;
 use std::ops::Index;
 use std::ops::IndexMut;

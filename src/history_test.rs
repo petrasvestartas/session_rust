@@ -1,8 +1,8 @@
-use crate::mini_test::TestResult;
-use crate::tolerance::TOLERANCE;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::TOLERANCE;
 
 pub fn run_history_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -45,9 +45,9 @@ pub fn run_history_begin_commit() -> TestResult {
 
 pub fn run_history_undo_redo() -> TestResult {
     MINI_TEST!("Undo Redo", {
-        use crate::session::FromGeometry;
         use crate::Point;
         use crate::Session;
+        use crate::session::FromGeometry;
 
         let mut session = Session::default();
         let point = Point::new(1.0, 2.0, 3.0);
@@ -110,10 +110,10 @@ pub fn run_history_clear() -> TestResult {
 
 pub fn run_history_undo_definition() -> TestResult {
     MINI_TEST!("Undo Definition", {
-        use crate::session::FromGeometry;
         use crate::Geometry;
         use crate::Point;
         use crate::Session;
+        use crate::session::FromGeometry;
         use std::rc::Rc;
 
         let mut session = Session::default();
@@ -201,11 +201,11 @@ pub fn run_history_budget() -> TestResult {
 
 pub fn run_history_weight() -> TestResult {
     MINI_TEST!("Weight", {
-        use crate::history::weight;
-        use crate::history::RECORD;
         use crate::Item;
         use crate::Point;
         use crate::Session;
+        use crate::history::RECORD;
+        use crate::history::weight;
         use std::rc::Rc;
 
         let point = Item::Geometry(crate::Geometry::Point(Rc::new(Point::new(0.0, 0.0, 0.0))));

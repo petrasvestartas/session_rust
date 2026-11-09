@@ -1,7 +1,7 @@
-use crate::mini_test::TestResult;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
 
 pub fn run_collection_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -93,9 +93,9 @@ pub fn run_collection_index_skips_dead() -> TestResult {
 
 pub fn run_collection_compact() -> TestResult {
     MINI_TEST!("Compact", {
-        use crate::history::Tomb;
         use crate::Collection;
         use crate::Point;
+        use crate::history::Tomb;
         use std::rc::Rc;
 
         let mut e: Vec<Rc<Point>> = Vec::new();
@@ -133,9 +133,9 @@ pub fn run_collection_compact() -> TestResult {
 
 pub fn run_collection_compact_step() -> TestResult {
     MINI_TEST!("Compact Step", {
-        use crate::history::Tomb;
         use crate::Collection;
         use crate::Point;
+        use crate::history::Tomb;
         use std::rc::Rc;
 
         let mut points: Collection<Rc<Point>> = Collection::new();

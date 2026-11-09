@@ -1233,8 +1233,16 @@ impl Closest {
             }
 
             let other = (
-                if (ends & 1) != 0 { u0 + u1 - seed.0 } else { seed.0 },
-                if (ends & 2) != 0 { v0 + v1 - seed.1 } else { seed.1 },
+                if (ends & 1) != 0 {
+                    u0 + u1 - seed.0
+                } else {
+                    seed.0
+                },
+                if (ends & 2) != 0 {
+                    v0 + v1 - seed.1
+                } else {
+                    seed.1
+                },
             );
             let (other_u, other_v) = surface_newton(surface, test_point, u0, u1, v0, v1, other);
             let other_gap = surface_at(surface, other_u, other_v).distance(test_point, None);

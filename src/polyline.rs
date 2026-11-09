@@ -1,5 +1,3 @@
-use crate::tolerance::Tolerance;
-use crate::tolerance::PI;
 use crate::Arrowhead;
 use crate::Color;
 use crate::Line;
@@ -7,6 +5,8 @@ use crate::Plane;
 use crate::Point;
 use crate::Vector;
 use crate::Xform;
+use crate::tolerance::PI;
+use crate::tolerance::Tolerance;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
@@ -1262,7 +1262,6 @@ impl Polyline {
             .cut_by_plane(plane0, Some(plane0.signed_distance(&middle) >= 0.0))
             .cut_by_plane(plane1, Some(plane1.signed_distance(&middle) >= 0.0))
     }
-
 }
 
 impl Default for Polyline {

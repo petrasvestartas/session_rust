@@ -1,9 +1,9 @@
-use crate::mini_test::TestResult;
-use crate::tolerance::Tolerance;
-use crate::tolerance::TOLERANCE;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::TOLERANCE;
+use crate::tolerance::Tolerance;
 
 pub fn run_nurbsknot_count() -> TestResult {
     MINI_TEST!("Nurbsknot Count", {
@@ -463,26 +463,22 @@ pub fn run_build_fitted_nurbsknots_periodic_adaptive() -> TestResult {
         MINI_CHECK!(
             TOLERANCE.is_allclose(&fallback, &[-1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0])
         );
-        MINI_CHECK!(nurbsknot::build_fitted_nurbsknots_periodic_adaptive(
-            &[0.0],
-            &[],
-            0,
-            3,
-            4,
-            3,
-            3.0
-        )
-        .is_empty());
-        MINI_CHECK!(nurbsknot::build_fitted_nurbsknots_periodic_adaptive(
-            &[0.0, 1.0, 2.0, 3.0],
-            &pts,
-            3,
-            3,
-            1,
-            3,
-            1.0
-        )
-        .is_empty());
+        MINI_CHECK!(
+            nurbsknot::build_fitted_nurbsknots_periodic_adaptive(&[0.0], &[], 0, 3, 4, 3, 3.0)
+                .is_empty()
+        );
+        MINI_CHECK!(
+            nurbsknot::build_fitted_nurbsknots_periodic_adaptive(
+                &[0.0, 1.0, 2.0, 3.0],
+                &pts,
+                3,
+                3,
+                1,
+                3,
+                1.0
+            )
+            .is_empty()
+        );
         MINI_CHECK!(TOLERANCE.is_allclose(&boundary, &[-3.0, 0.0, 3.0, 6.0]));
     })
 }

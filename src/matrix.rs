@@ -1,10 +1,10 @@
 use crate::color::Color;
 use crate::objects::Component;
 use crate::tolerance::Tolerance;
-use serde::ser::SerializeMap;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serializer;
+use serde::ser::SerializeMap;
 use std::cmp::Ordering;
 use std::fmt;
 use std::ops::Add;

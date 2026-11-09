@@ -1,4 +1,3 @@
-use crate::tree::TreeNode;
 use crate::Color;
 use crate::Line;
 use crate::Mesh;
@@ -6,10 +5,7 @@ use crate::NurbsCurve;
 use crate::Point;
 use crate::Polyline;
 use crate::Session;
-use mupdf::device::NativeDevice;
-use mupdf::path::PathWalker;
-use mupdf::pdf::PdfDocument;
-use mupdf::pdf::PdfObject;
+use crate::tree::TreeNode;
 use mupdf::ColorParams;
 use mupdf::Colorspace;
 use mupdf::Device;
@@ -19,13 +15,17 @@ use mupdf::Path;
 use mupdf::Rect;
 use mupdf::StrokeState;
 use mupdf::Text;
+use mupdf::device::NativeDevice;
+use mupdf::path::PathWalker;
+use mupdf::pdf::PdfDocument;
+use mupdf::pdf::PdfObject;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 use std::cell::RefCell;
-use std::collections::btree_map;
-use std::collections::hash_map;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::btree_map;
+use std::collections::hash_map;
 use std::rc::Rc;
 
 // ═══════════════════════════════════════════════════════════════════════════

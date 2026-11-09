@@ -1,9 +1,9 @@
-use crate::mini_test::TestResult;
-use crate::tolerance::PI;
-use crate::tolerance::TOLERANCE;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::PI;
+use crate::tolerance::TOLERANCE;
 
 pub fn run_xform_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -44,7 +44,9 @@ pub fn run_xform_constructor() -> TestResult {
         MINI_CHECK!(is_id);
         MINI_CHECK!(xfrom.m[12] == 5.0 && xfrom.m[13] == 10.0 && xfrom.m[14] == 15.0);
         MINI_CHECK!(xfrom[(0, 3)] == 5.0 && xset.m[13] == 7.0);
-        MINI_CHECK!(xstr == "[1.000000, 0.000000, 0.000000, 0.000000]\n[0.000000, 1.000000, 0.000000, 0.000000]\n[0.000000, 0.000000, 1.000000, 0.000000]\n[0.000000, 0.000000, 0.000000, 1.000000]");
+        MINI_CHECK!(
+            xstr == "[1.000000, 0.000000, 0.000000, 0.000000]\n[0.000000, 1.000000, 0.000000, 0.000000]\n[0.000000, 0.000000, 1.000000, 0.000000]\n[0.000000, 0.000000, 0.000000, 1.000000]"
+        );
         MINI_CHECK!(xrepr == format!("Xform(my_xform, {})", &x.guid()[..8]));
         MINI_CHECK!(xcopy == x && xcopy.guid() != x.guid());
         MINI_CHECK!(xother == x);

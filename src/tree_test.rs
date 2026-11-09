@@ -1,7 +1,7 @@
-use crate::mini_test::TestResult;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TreeNode
@@ -233,8 +233,8 @@ pub fn run_treenode_set_dead() -> TestResult {
 
 pub fn run_treenode_compact() -> TestResult {
     MINI_TEST!("Compact", {
-        use crate::history::Tomb;
         use crate::TreeNode;
+        use crate::history::Tomb;
         use std::rc::Rc;
 
         let p = TreeNode::new("p");

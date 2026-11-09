@@ -1,8 +1,8 @@
-use crate::tolerance::Tolerance;
-use crate::tolerance::TOLERANCE;
 use crate::Color;
 use crate::Vector;
 use crate::Xform;
+use crate::tolerance::TOLERANCE;
+use crate::tolerance::Tolerance;
 use serde::Deserialize;
 use serde::Serialize;
 use std::fmt;
@@ -33,12 +33,12 @@ pub struct Point {
     _y: f64, // Y coordinate.
     #[serde(rename = "z")]
     _z: f64, // Z coordinate.
-    pub name: String,      // Point name.
+    pub name: String, // Point name.
     #[serde(default = "crate::file_encoders::default_visible")]
-    pub is_visible: bool,  // Whether a viewer draws it.
+    pub is_visible: bool, // Whether a viewer draws it.
     #[serde(default)]
-    pub is_locked: bool,   // Whether a viewer keeps it from moving.
-    pub width: f64,        // Display width.
+    pub is_locked: bool, // Whether a viewer keeps it from moving.
+    pub width: f64,   // Display width.
     pub pointcolor: Color, // Display color.
 }
 

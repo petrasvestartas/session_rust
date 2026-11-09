@@ -1,7 +1,7 @@
-use crate::mini_test::TestResult;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
 
 pub fn run_pointcloud_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -575,10 +575,14 @@ REGISTER_MINI_TEST!(
 
 pub fn run_pointcloud_is_visible_round_trip() -> TestResult {
     MINI_TEST!("Is Visible Round Trip", {
-        use crate::PointCloud;
         use crate::Point;
+        use crate::PointCloud;
 
-        let points = vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0)];
+        let points = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+        ];
         let mut hidden = PointCloud::new(points, Vec::new(), Vec::new());
 
         MINI_CHECK!(hidden.is_visible);
@@ -600,10 +604,14 @@ REGISTER_MINI_TEST!(
 
 pub fn run_pointcloud_is_locked_round_trip() -> TestResult {
     MINI_TEST!("Is Locked Round Trip", {
-        use crate::PointCloud;
         use crate::Point;
+        use crate::PointCloud;
 
-        let points = vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0)];
+        let points = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+        ];
         let mut locked = PointCloud::new(points, Vec::new(), Vec::new());
 
         MINI_CHECK!(!locked.is_locked);

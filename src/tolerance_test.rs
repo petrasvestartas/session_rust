@@ -1,7 +1,7 @@
-use crate::mini_test::TestResult;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
 
 pub fn run_tolerance_is_zero() -> TestResult {
     MINI_TEST!("Is Zero", {
@@ -261,9 +261,9 @@ pub fn run_tolerance_triangle_edge_by_angle() -> TestResult {
 
 pub fn run_tolerance_rad_deg() -> TestResult {
     MINI_TEST!("Rad Deg Conversion", {
+        use crate::Tolerance;
         use crate::tolerance::deg_to_rad;
         use crate::tolerance::rad_to_deg;
-        use crate::Tolerance;
 
         let r0 = rad_to_deg(Tolerance::PI);
         let r1 = deg_to_rad(180.0);
@@ -321,8 +321,8 @@ pub fn run_tolerance_is_angles_close() -> TestResult {
 
 pub fn run_tolerance_is_point_close() -> TestResult {
     MINI_TEST!("Is Point Close", {
-        use crate::tolerance::TOLERANCE;
         use crate::Point;
+        use crate::tolerance::TOLERANCE;
 
         let a = Point::new(1.0, 2.0, 3.0);
         let b = Point::new(1.0, 2.0, 3.0 + 1e-12);
@@ -415,8 +415,8 @@ pub fn run_tolerance_is_finite() -> TestResult {
 
 pub fn run_tolerance_is_vector_close() -> TestResult {
     MINI_TEST!("Is Vector Close", {
-        use crate::tolerance::TOLERANCE;
         use crate::Vector;
+        use crate::tolerance::TOLERANCE;
 
         let a = Vector::new(1.0, 2.0, 3.0);
         let b = Vector::new(1.0, 2.0, 3.0 + 1e-12);

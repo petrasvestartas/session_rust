@@ -1,10 +1,10 @@
 #![allow(clippy::excessive_precision, clippy::needless_range_loop)]
-use crate::mini_test::TestResult;
-use crate::tolerance::PI;
-use crate::tolerance::TOLERANCE;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::PI;
+use crate::tolerance::TOLERANCE;
 
 pub fn run_nurbscurve_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -50,10 +50,10 @@ pub fn run_nurbscurve_constructor() -> TestResult {
 
 pub fn run_nurbscurve_create_interpolated() -> TestResult {
     MINI_TEST!("Create Interpolated", {
-        use crate::nurbsknot::CurveInterpStyle;
-        use crate::nurbsknot::CurveNurbsKnotStyle;
         use crate::NurbsCurve;
         use crate::Point;
+        use crate::nurbsknot::CurveInterpStyle;
+        use crate::nurbsknot::CurveNurbsKnotStyle;
 
         let points = vec![
             Point::new(14.0, 9.0, 0.0),
@@ -640,15 +640,21 @@ pub fn run_nurbscurve_evaluation() -> TestResult {
         ));
         MINI_CHECK!(!curve.perpendicular_plane_at(-0.1, true).is_valid());
         MINI_CHECK!(!curve.perpendicular_plane_at(1.1, true).is_valid());
-        MINI_CHECK!(curve
-            .perpendicular_plane_at(curve.domain_start(), false)
-            .is_valid());
-        MINI_CHECK!(curve
-            .perpendicular_plane_at(curve.domain_end(), false)
-            .is_valid());
-        MINI_CHECK!(!curve
-            .perpendicular_plane_at(curve.domain_start() - 0.1, false)
-            .is_valid());
+        MINI_CHECK!(
+            curve
+                .perpendicular_plane_at(curve.domain_start(), false)
+                .is_valid()
+        );
+        MINI_CHECK!(
+            curve
+                .perpendicular_plane_at(curve.domain_end(), false)
+                .is_valid()
+        );
+        MINI_CHECK!(
+            !curve
+                .perpendicular_plane_at(curve.domain_start() - 0.1, false)
+                .is_valid()
+        );
 
         let frames = curve.get_perpendicular_planes(4);
 
@@ -751,11 +757,21 @@ pub fn run_nurbscurve_modifications() -> TestResult {
 
         curve.swap_coordinates(0, 1);
 
-        MINI_CHECK!(TOLERANCE.is_point_close(&curve.get_cv(0).unwrap(), &Point::new(0.0, 0.0, 0.0)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&curve.get_cv(1).unwrap(), &Point::new(2.0, 1.0, 0.0)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&curve.get_cv(2).unwrap(), &Point::new(0.0, 2.0, 0.0)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&curve.get_cv(3).unwrap(), &Point::new(2.0, 3.0, 0.0)));
-        MINI_CHECK!(TOLERANCE.is_point_close(&curve.get_cv(4).unwrap(), &Point::new(0.0, 4.0, 0.0)));
+        MINI_CHECK!(
+            TOLERANCE.is_point_close(&curve.get_cv(0).unwrap(), &Point::new(0.0, 0.0, 0.0))
+        );
+        MINI_CHECK!(
+            TOLERANCE.is_point_close(&curve.get_cv(1).unwrap(), &Point::new(2.0, 1.0, 0.0))
+        );
+        MINI_CHECK!(
+            TOLERANCE.is_point_close(&curve.get_cv(2).unwrap(), &Point::new(0.0, 2.0, 0.0))
+        );
+        MINI_CHECK!(
+            TOLERANCE.is_point_close(&curve.get_cv(3).unwrap(), &Point::new(2.0, 3.0, 0.0))
+        );
+        MINI_CHECK!(
+            TOLERANCE.is_point_close(&curve.get_cv(4).unwrap(), &Point::new(0.0, 4.0, 0.0))
+        );
 
         let mut ct = curve.duplicate();
         let a = ct.domain_start() + (ct.domain_end() - ct.domain_start()) / 3.0;
@@ -983,11 +999,11 @@ pub fn run_nurbscurve_curvature() -> TestResult {
 
 pub fn run_nurbscurve_closest_point() -> TestResult {
     MINI_TEST!("Closest Point", {
-        use crate::nurbsknot::CurveInterpStyle;
-        use crate::nurbsknot::CurveNurbsKnotStyle;
         use crate::NurbsCurve;
         use crate::Point;
         use crate::Primitives;
+        use crate::nurbsknot::CurveInterpStyle;
+        use crate::nurbsknot::CurveNurbsKnotStyle;
 
         let circle = Primitives::circle(0.0, 0.0, 0.0, 2.0);
         let cp = circle.closest_point(&Point::new(5.0, 0.0, 0.0));
@@ -1232,7 +1248,11 @@ pub fn run_nurbscurve_is_visible_round_trip() -> TestResult {
         use crate::NurbsCurve;
         use crate::Point;
 
-        let points = vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0)];
+        let points = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+        ];
         let mut hidden = NurbsCurve::create(false, 2, &points);
 
         MINI_CHECK!(hidden.is_visible);
@@ -1257,7 +1277,11 @@ pub fn run_nurbscurve_is_locked_round_trip() -> TestResult {
         use crate::NurbsCurve;
         use crate::Point;
 
-        let points = vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0)];
+        let points = vec![
+            Point::new(0.0, 0.0, 0.0),
+            Point::new(1.0, 0.0, 0.0),
+            Point::new(1.0, 1.0, 0.0),
+        ];
         let mut locked = NurbsCurve::create(false, 2, &points);
 
         MINI_CHECK!(!locked.is_locked);

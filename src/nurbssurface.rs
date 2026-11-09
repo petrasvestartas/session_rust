@@ -21,11 +21,11 @@ use crate::tolerance::Tolerance;
 use crate::vector::Vector;
 use crate::xform::Xform;
 use prost::Message;
-use serde::ser::SerializeMap;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
+use serde::ser::SerializeMap;
 use std::fmt;
 use std::sync::OnceLock;
 
@@ -889,11 +889,7 @@ impl NurbsSurface {
 
     /// Return the order (degree + 1) in dir.
     pub fn order(&self, dir: usize) -> usize {
-        if dir < 2 {
-            self.m_order[dir]
-        } else {
-            0
-        }
+        if dir < 2 { self.m_order[dir] } else { 0 }
     }
 
     /// Return the degree in dir.
@@ -907,11 +903,7 @@ impl NurbsSurface {
 
     /// Return the number of control vertices in dir.
     pub fn cv_count(&self, dir: usize) -> usize {
-        if dir < 2 {
-            self.m_cv_count[dir]
-        } else {
-            0
-        }
+        if dir < 2 { self.m_cv_count[dir] } else { 0 }
     }
 
     /// Return cv_count(0) * cv_count(1).
@@ -1920,7 +1912,10 @@ impl NurbsSurface {
             return Mesh::new();
         }
 
-        let bilinear = self.degree(0) == 1 && self.degree(1) == 1 && self.cv_count(0) == 2 && self.cv_count(1) == 2;
+        let bilinear = self.degree(0) == 1
+            && self.degree(1) == 1
+            && self.cv_count(0) == 2
+            && self.cv_count(1) == 2;
 
         if bilinear && self.is_planar(None, 1e-6) {
             return self.mesh_planar();
@@ -2123,7 +2118,15 @@ impl NurbsSurface {
 
     /// Return the multi-line form with every control point.
     pub fn repr(&self) -> String {
-        let mut result = format!("NurbsSurface(\n  name={},\n  degree=({},{}),\n  cvs=({},{}),\n  rational={},\n  control_points=[\n", self.name, self.degree(0), self.degree(1), self.m_cv_count[0], self.m_cv_count[1], self.m_is_rat);
+        let mut result = format!(
+            "NurbsSurface(\n  name={},\n  degree=({},{}),\n  cvs=({},{}),\n  rational={},\n  control_points=[\n",
+            self.name,
+            self.degree(0),
+            self.degree(1),
+            self.m_cv_count[0],
+            self.m_cv_count[1],
+            self.m_is_rat
+        );
 
         for i in 0..self.m_cv_count[0] {
             for j in 0..self.m_cv_count[1] {

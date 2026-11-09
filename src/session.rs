@@ -1,24 +1,3 @@
-use crate::collection::Keyed;
-use crate::color::Color;
-use crate::history::clone;
-use crate::history::weight;
-use crate::history::Entry;
-use crate::history::History;
-use crate::history::Op;
-use crate::history::ReplaceOp;
-use crate::history::Tomb;
-use crate::history::Tombstone;
-use crate::history::TreeOp;
-use crate::history::XformOp;
-use crate::history::RECORD;
-use crate::interaction::Interaction;
-use crate::intersection::line_line;
-use crate::intersection::line_plane;
-use crate::intersection::ray_box;
-use crate::intersection::ray_mesh_bvh;
-use crate::objects::Component;
-use crate::tree::node_head;
-use crate::tree::node_tail;
 use crate::BRep;
 use crate::Collection;
 use crate::Element;
@@ -29,18 +8,40 @@ use crate::Matrix;
 use crate::Mesh;
 use crate::NurbsCurve;
 use crate::NurbsSurface;
+use crate::OBB;
 use crate::Objects;
 use crate::Plane;
 use crate::Point;
 use crate::PointCloud;
 use crate::Polyline;
 use crate::SpatialBVH;
+use crate::Text;
 use crate::Tolerance;
 use crate::Tree;
 use crate::TreeNode;
 use crate::Vector;
 use crate::Xform;
-use crate::OBB;
+use crate::collection::Keyed;
+use crate::color::Color;
+use crate::history::Entry;
+use crate::history::History;
+use crate::history::Op;
+use crate::history::RECORD;
+use crate::history::ReplaceOp;
+use crate::history::Tomb;
+use crate::history::Tombstone;
+use crate::history::TreeOp;
+use crate::history::XformOp;
+use crate::history::clone;
+use crate::history::weight;
+use crate::interaction::Interaction;
+use crate::intersection::line_line;
+use crate::intersection::line_plane;
+use crate::intersection::ray_box;
+use crate::intersection::ray_mesh_bvh;
+use crate::objects::Component;
+use crate::tree::node_head;
+use crate::tree::node_tail;
 use serde::Deserialize;
 use serde::Serialize;
 use std::cell::RefCell;
@@ -1699,6 +1700,15 @@ impl Session {
         self.add_component(matrix.to_component(), parent)
     }
 
+    /// Add text as its component (type_name Text, the text's guid), placed by set_xform on that guid.
+    pub fn add_text(
+        &mut self,
+        text: &Text,
+        parent: Option<&Rc<RefCell<TreeNode>>>,
+    ) -> Rc<RefCell<TreeNode>> {
+        self.add_component(text.to_component(), parent)
+    }
+
     /// Add a definition, geometry in its own frame that instances share; returns its guid, also when that guid is already defined, and "" for a guid an object, instance or component holds.
     pub fn add_definition(&mut self, definition: Geometry) -> String {
         let guid = definition.guid().to_string();
@@ -2288,6 +2298,14 @@ impl Session {
         self.xforms.insert(guid.to_string(), xform);
         self.bvh_cache_dirty = true;
         self.revision += 1;
+    }
+
+    /// Set a local transform and record its presentation duration and delay.
+    pub fn animate_xform(&mut self, guid: &str, xform: Xform, duration_ms: f64, delay_ms: f64) {
+        self.set_xform(guid, xform);
+        self.graph
+            .set_vertex_attribute(guid, "xform_ms", duration_ms);
+        self.graph.set_vertex_attribute(guid, "delay_ms", delay_ms);
     }
 
     /// Remove an object's local transform, returning whether one was present.

@@ -1,8 +1,8 @@
-use crate::mini_test::TestResult;
-use crate::tolerance::TOLERANCE;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::TOLERANCE;
 
 pub fn run_file_obj_read_bunny() -> TestResult {
     MINI_TEST!("Read Bunny", {
@@ -50,10 +50,10 @@ pub fn run_file_obj_read_bunny() -> TestResult {
 
 pub fn run_file_obj_write_read_roundtrip() -> TestResult {
     MINI_TEST!("Write Read Roundtrip", {
-        use crate::read_file_obj;
-        use crate::write_file_obj;
         use crate::Mesh;
         use crate::Point;
+        use crate::read_file_obj;
+        use crate::write_file_obj;
         use std::path::PathBuf;
 
         std::fs::create_dir_all("./serialization").unwrap();
@@ -83,10 +83,10 @@ pub fn run_file_obj_write_read_roundtrip() -> TestResult {
 
 pub fn run_file_obj_string_roundtrip() -> TestResult {
     MINI_TEST!("String Roundtrip", {
-        use crate::read_file_obj_from_str;
-        use crate::write_file_obj_to_string;
         use crate::Mesh;
         use crate::Point;
+        use crate::read_file_obj_from_str;
+        use crate::write_file_obj_to_string;
 
         let mut original = Mesh::new();
         let v0 = original.add_vertex(Point::new(0.0, 0.0, 0.0), None);

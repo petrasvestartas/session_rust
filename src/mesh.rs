@@ -1,18 +1,18 @@
-use crate::matrix::Matrix;
-use crate::polyline::Polyline;
-use crate::remesh_cdt;
-use crate::spatial_aabbtree::SpatialAABBTree;
-use crate::tolerance::PI;
+use crate::AABB;
 use crate::Color;
 use crate::Line;
+use crate::OBB;
 use crate::Plane;
 use crate::Point;
 use crate::SpatialBVH;
 use crate::Tolerance;
 use crate::Vector;
 use crate::Xform;
-use crate::AABB;
-use crate::OBB;
+use crate::matrix::Matrix;
+use crate::polyline::Polyline;
+use crate::remesh_cdt;
+use crate::spatial_aabbtree::SpatialAABBTree;
+use crate::tolerance::PI;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -317,19 +317,19 @@ pub struct Mesh {
     guid: std::sync::OnceLock<String>,                           // Lazy guid.
     pub name: String,                                            // Mesh name.
     pub is_visible: bool,                                        // Whether a viewer draws it.
-    pub is_locked: bool,                                         // Whether a viewer keeps it from moving.
-    pub color_mode: ColorMode,                                   // Active color mode.
-    pointcolors: Vec<Color>,                                     // Vertex colors.
-    facecolors: Vec<Color>,                                      // Face colors.
-    linecolors: Vec<Color>,                                      // Edge colors.
-    widths: Vec<f64>,                                            // Edge widths.
-    objectcolor: Color,                                          // Object color.
-    max_vertex: usize,                                           // Next vertex key.
-    max_face: usize,                                             // Next face key.
-    pub triangulation: HashMap<usize, Vec<[usize; 3]>>,          // Cached triangulations.
-    triangle_bvh_built: bool, // Whether the triangle caches are current.
+    pub is_locked: bool,       // Whether a viewer keeps it from moving.
+    pub color_mode: ColorMode, // Active color mode.
+    pointcolors: Vec<Color>,   // Vertex colors.
+    facecolors: Vec<Color>,    // Face colors.
+    linecolors: Vec<Color>,    // Edge colors.
+    widths: Vec<f64>,          // Edge widths.
+    objectcolor: Color,        // Object color.
+    max_vertex: usize,         // Next vertex key.
+    max_face: usize,           // Next face key.
+    pub triangulation: HashMap<usize, Vec<[usize; 3]>>, // Cached triangulations.
+    triangle_bvh_built: bool,  // Whether the triangle caches are current.
     pub tri_bvh: Option<SpatialBVH>, // BVH over the cached triangle AABBs.
-    tri_aabbs: Vec<AABB>,     // Per-triangle AABBs.
+    tri_aabbs: Vec<AABB>,      // Per-triangle AABBs.
     pub tri_tris: Vec<[usize; 3]>, // Triangle vertex indices into tri_vertices; session_viewer reads it for memory accounting.
     tri_face_subidx: Vec<(usize, usize)>, // Face index and sub-triangle index per triangle.
     pub tri_vertices: Vec<Point>, // Sequential vertex positions; session_viewer reads it for memory accounting.
@@ -6746,8 +6746,14 @@ impl Mesh {
             mesh.name = name.to_string();
         }
 
-        mesh.is_visible = data.get("is_visible").and_then(|v| v.as_bool()).unwrap_or(true);
-        mesh.is_locked = data.get("is_locked").and_then(|v| v.as_bool()).unwrap_or(false);
+        mesh.is_visible = data
+            .get("is_visible")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+        mesh.is_locked = data
+            .get("is_locked")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
 
         if let Some(halfedge_json) = data.get("halfedge") {
             mesh.halfedge = Mesh::halfedge_from_json(halfedge_json)?;
@@ -7514,6 +7520,10 @@ impl std::fmt::Debug for Mesh {
 impl PartialEq for Mesh {
     /// Compare name, vertices and faces; guid ignored.
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && self.is_visible == other.is_visible && self.is_locked == other.is_locked && self.vertex == other.vertex && self.face == other.face
+        self.name == other.name
+            && self.is_visible == other.is_visible
+            && self.is_locked == other.is_locked
+            && self.vertex == other.vertex
+            && self.face == other.face
     }
 }

@@ -1,14 +1,14 @@
-use crate::mini_test::TestResult;
-use crate::tolerance::TOLERANCE;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::TOLERANCE;
 
 pub fn run_encoders_file_json_dump_load() -> TestResult {
     MINI_TEST!("Json Dump Load", {
+        use crate::Point;
         use crate::file_encoders::file_json_dump;
         use crate::file_encoders::file_json_load;
-        use crate::Point;
         use std::fs;
 
         let mut original = Point::new(1.5, 2.5, 3.5);
@@ -30,9 +30,9 @@ pub fn run_encoders_file_json_dump_load() -> TestResult {
 
 pub fn run_encoders_file_json_dumps_loads() -> TestResult {
     MINI_TEST!("Json Dumps Loads", {
+        use crate::Vector;
         use crate::file_encoders::file_json_dumps;
         use crate::file_encoders::file_json_loads;
-        use crate::Vector;
 
         let mut original = Vector::new(42.1, 84.2, 126.3);
         original.name = "test_vector".to_string();
@@ -53,8 +53,8 @@ pub fn run_encoders_file_json_dumps_loads() -> TestResult {
 
 pub fn run_encoders_file_encode_collection_values() -> TestResult {
     MINI_TEST!("Encode Collection Values", {
-        use crate::file_encoders::file_encode_collection;
         use crate::Point;
+        use crate::file_encoders::file_encode_collection;
 
         let points = vec![
             Point::new(1.0, 2.0, 3.0),
@@ -74,8 +74,8 @@ pub fn run_encoders_file_encode_collection_values() -> TestResult {
 
 pub fn run_encoders_file_encode_collection_shared_ptr() -> TestResult {
     MINI_TEST!("Encode Collection Shared Ptr", {
-        use crate::file_encoders::file_encode_collection;
         use crate::Line;
+        use crate::file_encoders::file_encode_collection;
         use std::rc::Rc;
 
         let lines = vec![
@@ -94,9 +94,9 @@ pub fn run_encoders_file_encode_collection_shared_ptr() -> TestResult {
 
 pub fn run_encoders_file_decode_collection() -> TestResult {
     MINI_TEST!("Decode Collection", {
+        use crate::Point;
         use crate::file_encoders::file_decode_collection;
         use crate::file_encoders::file_encode_collection;
-        use crate::Point;
 
         let original_points = vec![Point::new(1.0, 2.0, 3.0), Point::new(4.0, 5.0, 6.0)];
 
@@ -111,9 +111,9 @@ pub fn run_encoders_file_decode_collection() -> TestResult {
 
 pub fn run_encoders_file_decode_collection_ptr() -> TestResult {
     MINI_TEST!("Decode Collection Ptr", {
+        use crate::Vector;
         use crate::file_encoders::file_decode_collection_ptr;
         use crate::file_encoders::file_encode_collection;
-        use crate::Vector;
         use std::rc::Rc;
 
         let original_vectors = vec![
@@ -132,9 +132,9 @@ pub fn run_encoders_file_decode_collection_ptr() -> TestResult {
 
 pub fn run_encoders_nested_collections() -> TestResult {
     MINI_TEST!("Nested Collections", {
+        use crate::Line;
         use crate::file_encoders::file_decode_collection;
         use crate::file_encoders::file_encode_collection;
-        use crate::Line;
 
         let lines = vec![
             Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0),
@@ -157,11 +157,11 @@ pub fn run_encoders_nested_collections() -> TestResult {
 
 pub fn run_encoders_roundtrip_file_io() -> TestResult {
     MINI_TEST!("Roundtrip File Io", {
+        use crate::Vector;
         use crate::file_encoders::file_decode_collection;
         use crate::file_encoders::file_encode_collection;
         use crate::file_encoders::file_json_dump;
         use crate::file_encoders::file_json_load_data;
-        use crate::Vector;
         use std::fs;
 
         let vectors = vec![
@@ -188,9 +188,9 @@ pub fn run_encoders_roundtrip_file_io() -> TestResult {
 
 pub fn run_encoders_pretty_vs_compact() -> TestResult {
     MINI_TEST!("Pretty Vs Compact", {
+        use crate::Point;
         use crate::file_encoders::file_json_dumps;
         use crate::file_encoders::file_json_loads;
-        use crate::Point;
 
         let point = Point::new(1.0, 2.0, 3.0);
 
@@ -240,9 +240,9 @@ pub fn run_encoders_decode_primitives() -> TestResult {
 
 pub fn run_encoders_decode_list() -> TestResult {
     MINI_TEST!("Decode List", {
+        use crate::Point;
         use crate::file_encoders::file_decode_collection;
         use crate::file_encoders::file_encode_collection;
-        use crate::Point;
 
         let data = vec![1, 2, 3];
         let json_str = serde_json::to_string(&data).unwrap();
@@ -265,9 +265,9 @@ pub fn run_encoders_decode_list() -> TestResult {
 
 pub fn run_encoders_decode_dict() -> TestResult {
     MINI_TEST!("Decode Dict", {
+        use crate::Vector;
         use crate::file_encoders::file_json_dumps;
         use crate::file_encoders::file_json_loads;
-        use crate::Vector;
         use std::collections::BTreeMap;
 
         let mut data = BTreeMap::new();
@@ -290,10 +290,10 @@ pub fn run_encoders_decode_dict() -> TestResult {
 
 pub fn run_encoders_decode_mesh() -> TestResult {
     MINI_TEST!("Decode Mesh", {
-        use crate::file_encoders::file_json_dumps;
-        use crate::file_encoders::file_json_loads;
         use crate::Mesh;
         use crate::Point;
+        use crate::file_encoders::file_json_dumps;
+        use crate::file_encoders::file_json_loads;
 
         let mesh = Mesh::from_vertices_and_faces(
             vec![
@@ -313,10 +313,10 @@ pub fn run_encoders_decode_mesh() -> TestResult {
 
 pub fn run_encoders_decode_instance_ref() -> TestResult {
     MINI_TEST!("Decode Instance Ref", {
-        use crate::file_encoders::file_json_dumps;
-        use crate::file_encoders::file_json_loads;
         use crate::InstanceRef;
         use crate::Xform;
+        use crate::file_encoders::file_json_dumps;
+        use crate::file_encoders::file_json_loads;
 
         let instance = InstanceRef::new("def-abc", Xform::translation(1.0, 2.0, 3.0));
         let json_str = file_json_dumps(&instance, true).unwrap();
@@ -329,11 +329,11 @@ pub fn run_encoders_decode_instance_ref() -> TestResult {
 
 pub fn run_encoders_decode_element_feature() -> TestResult {
     MINI_TEST!("Decode Element Feature", {
+        use crate::Point;
+        use crate::Polyline;
         use crate::element::ElementFeature;
         use crate::file_encoders::file_json_dumps;
         use crate::file_encoders::file_json_loads;
-        use crate::Point;
-        use crate::Polyline;
 
         let outline = Polyline::new(vec![
             Point::new(0.0, 0.0, 0.0),
@@ -353,9 +353,9 @@ pub fn run_encoders_decode_element_feature() -> TestResult {
 
 pub fn run_encoders_decode_component() -> TestResult {
     MINI_TEST!("Decode Component", {
+        use crate::Component;
         use crate::file_encoders::file_json_dumps;
         use crate::file_encoders::file_json_loads;
-        use crate::Component;
 
         let mut component = Component::new();
         component.type_name = "FloorBuilder".to_string();
@@ -374,12 +374,12 @@ pub fn run_encoders_decode_component() -> TestResult {
 
 pub fn run_encoders_decode_nurbs_surface_trimmed() -> TestResult {
     MINI_TEST!("Decode Nurbs Surface Trimmed", {
-        use crate::file_encoders::file_json_dumps;
-        use crate::file_encoders::file_json_loads;
         use crate::NurbsCurve;
         use crate::NurbsSurface;
         use crate::NurbsSurfaceTrimmed;
         use crate::Point;
+        use crate::file_encoders::file_json_dumps;
+        use crate::file_encoders::file_json_loads;
 
         let mut surface = NurbsSurface::new(3, false, 2, 2, 2, 2);
         surface.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0));
@@ -421,10 +421,10 @@ pub fn run_encoders_decode_nurbs_surface_trimmed() -> TestResult {
 
 pub fn run_encoders_decode_nurbs_surface() -> TestResult {
     MINI_TEST!("Decode Nurbs Surface", {
-        use crate::file_encoders::file_json_dumps;
-        use crate::file_encoders::file_json_loads;
         use crate::NurbsSurface;
         use crate::Point;
+        use crate::file_encoders::file_json_dumps;
+        use crate::file_encoders::file_json_loads;
 
         let mut surface = NurbsSurface::new(3, false, 2, 2, 2, 2);
         surface.set_cv(0, 0, &Point::new(0.0, 0.0, 0.0));
@@ -443,9 +443,9 @@ pub fn run_encoders_decode_nurbs_surface() -> TestResult {
 
 pub fn run_encoders_decode_brep() -> TestResult {
     MINI_TEST!("Decode BRep", {
+        use crate::BRep;
         use crate::file_encoders::file_json_dumps;
         use crate::file_encoders::file_json_loads;
-        use crate::BRep;
 
         let brep = BRep::create_box(1.0, 2.0, 3.0);
         let json_str = file_json_dumps(&brep, true).unwrap();
@@ -457,13 +457,13 @@ pub fn run_encoders_decode_brep() -> TestResult {
 
 pub fn run_encoders_decode_element() -> TestResult {
     MINI_TEST!("Decode Element", {
-        use crate::element::ElementFeature;
-        use crate::file_encoders::file_json_dumps;
-        use crate::file_encoders::file_json_loads;
         use crate::Element;
         use crate::Mesh;
         use crate::Point;
         use crate::Polyline;
+        use crate::element::ElementFeature;
+        use crate::file_encoders::file_json_dumps;
+        use crate::file_encoders::file_json_loads;
 
         let mesh = Mesh::from_vertices_and_faces(
             vec![
@@ -491,15 +491,15 @@ pub fn run_encoders_decode_element() -> TestResult {
 
 pub fn run_encoders_decode_objects() -> TestResult {
     MINI_TEST!("Decode Objects", {
-        use crate::element::ElementFeature;
-        use crate::file_encoders::file_json_dumps;
-        use crate::file_encoders::file_json_loads;
         use crate::Component;
         use crate::InstanceRef;
         use crate::Objects;
         use crate::Point;
         use crate::Polyline;
         use crate::Xform;
+        use crate::element::ElementFeature;
+        use crate::file_encoders::file_json_dumps;
+        use crate::file_encoders::file_json_loads;
         use std::rc::Rc;
 
         let mut component = Component::new();
@@ -556,9 +556,9 @@ pub fn run_encoders_list_in_list_in_list() -> TestResult {
 
 pub fn run_encoders_dict_of_lists() -> TestResult {
     MINI_TEST!("Dict Of Lists", {
+        use crate::Point;
         use crate::file_encoders::file_decode_collection;
         use crate::file_encoders::file_encode_collection;
-        use crate::Point;
 
         let points = vec![Point::new(1.0, 0.0, 0.0), Point::new(0.0, 1.0, 0.0)];
 
@@ -637,8 +637,8 @@ pub fn run_encoders_dict_of_dicts() -> TestResult {
 
 pub fn run_encoders_write_error() -> TestResult {
     MINI_TEST!("Write Error", {
-        use crate::file_encoders::file_json_dump;
         use crate::Point;
+        use crate::file_encoders::file_json_dump;
 
         let point = Point::new(1.0, 2.0, 3.0);
         let result = file_json_dump(&point, "serialization/missing-directory/test.json", true);

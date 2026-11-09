@@ -3,9 +3,9 @@
 // ═══════════════════════════════════════════════════════════════════════════
 #[cfg(test)]
 mod pdf_tests {
+    use crate::Session;
     use crate::pdf::import_pdf;
     use crate::tolerance::TOLERANCE;
-    use crate::Session;
     use std::path::PathBuf;
 
     #[test]

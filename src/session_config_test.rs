@@ -1,12 +1,12 @@
-use crate::mini_test::TestResult;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
 
 pub fn run_session_config_runtime_modification() -> TestResult {
     MINI_TEST!("Runtime Modification", {
-        use crate::session_config::SessionConfig;
         use crate::session_config::SESSION_CONFIG;
+        use crate::session_config::SessionConfig;
 
         SESSION_CONFIG.write().reset();
 

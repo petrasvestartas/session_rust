@@ -1,8 +1,8 @@
-use crate::mini_test::TestResult;
-use crate::tolerance::TOLERANCE;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::TOLERANCE;
 
 pub fn run_closest_curve_point() -> TestResult {
     MINI_TEST!("Curve Point", {
@@ -171,12 +171,12 @@ pub fn run_closest_surface_point_beside_a_closed_seam() -> TestResult {
 
 pub fn run_closest_surface_curve() -> TestResult {
     MINI_TEST!("Surface Curve", {
-        use crate::nurbsknot::CurveInterpStyle;
-        use crate::nurbsknot::CurveNurbsKnotStyle;
         use crate::Closest;
         use crate::NurbsCurve;
         use crate::Point;
         use crate::Primitives;
+        use crate::nurbsknot::CurveInterpStyle;
+        use crate::nurbsknot::CurveNurbsKnotStyle;
 
         let cyl = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 4.0);
         let (u0, u1) = cyl.domain(0).unwrap();
@@ -412,8 +412,8 @@ pub fn run_closest_nurbscurves_closest() -> TestResult {
 
 pub fn run_closest_boxes_closest() -> TestResult {
     MINI_TEST!("Boxes Closest", {
-        use crate::Closest;
         use crate::AABB;
+        use crate::Closest;
 
         let boxes = vec![
             AABB::new(0.0, 0.0, 0.0, 1.0, 1.0, 1.0),

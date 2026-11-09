@@ -1,20 +1,20 @@
-use crate::mini_test::TestResult;
-use crate::tolerance::PI;
-use crate::tolerance::TOLERANCE;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::PI;
+use crate::tolerance::TOLERANCE;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Element
 // ═══════════════════════════════════════════════════════════════════════════
 pub fn run_element_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
-        use crate::element::Element;
-        use crate::element::ElementGeometry;
         use crate::BRep;
         use crate::Mesh;
         use crate::Point;
+        use crate::element::Element;
+        use crate::element::ElementGeometry;
 
         let m = Mesh::from_vertices_and_faces(
             vec![
@@ -54,11 +54,11 @@ pub fn run_element_constructor() -> TestResult {
 
 pub fn run_element_place() -> TestResult {
     MINI_TEST!("Place", {
-        use crate::element::Element;
-        use crate::element::ElementGeometry;
         use crate::Mesh;
         use crate::Point;
         use crate::Xform;
+        use crate::element::Element;
+        use crate::element::ElementGeometry;
 
         let m = Mesh::from_vertices_and_faces(
             vec![
@@ -89,13 +89,13 @@ pub fn run_element_place() -> TestResult {
 
 pub fn run_element_place_moves_features() -> TestResult {
     MINI_TEST!("Place Moves Features", {
-        use crate::element::Element;
-        use crate::element::ElementFeature;
         use crate::Mesh;
         use crate::Point;
         use crate::Polyline;
         use crate::Vector;
         use crate::Xform;
+        use crate::element::Element;
+        use crate::element::ElementFeature;
 
         let m = Mesh::from_vertices_and_faces(
             vec![
@@ -139,12 +139,12 @@ pub fn run_element_place_moves_features() -> TestResult {
 
 pub fn run_element_add_geometry_op() -> TestResult {
     MINI_TEST!("Add Geometry Op", {
-        use crate::element::Element;
-        use crate::element::ElementGeometry;
         use crate::BRep;
         use crate::Mesh;
         use crate::Point;
         use crate::Xform;
+        use crate::element::Element;
+        use crate::element::ElementGeometry;
 
         let m = Mesh::from_vertices_and_faces(
             vec![
@@ -235,10 +235,10 @@ pub fn run_element_obb() -> TestResult {
 
 pub fn run_element_session_geometry_mesh() -> TestResult {
     MINI_TEST!("Session Geometry Mesh", {
-        use crate::element::Element;
         use crate::Mesh;
         use crate::Point;
         use crate::Xform;
+        use crate::element::Element;
 
         let m = Mesh::from_vertices_and_faces(
             vec![
@@ -588,10 +588,10 @@ pub fn run_element_brep_aabb() -> TestResult {
 
 pub fn run_element_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
-        use crate::element::Element;
-        use crate::element::ElementGeometry;
         use crate::Mesh;
         use crate::Point;
+        use crate::element::Element;
+        use crate::element::ElementGeometry;
 
         let m = Mesh::from_vertices_and_faces(
             vec![
@@ -619,9 +619,9 @@ pub fn run_element_json_roundtrip() -> TestResult {
 
 pub fn run_element_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
+        use crate::BRep;
         use crate::element::Element;
         use crate::element::ElementGeometry;
-        use crate::BRep;
 
         let b = BRep::create_box(2.0, 3.0, 4.0);
         let e = Element::from_brep(b, "proto_test");
@@ -806,11 +806,11 @@ pub fn run_element_registry_unknown_type_degrades() -> TestResult {
 
 pub fn run_element_features_round_trip() -> TestResult {
     MINI_TEST!("Features Round Trip", {
-        use crate::element::Element;
-        use crate::element::ElementFeature;
         use crate::Point;
         use crate::Polyline;
         use crate::Vector;
+        use crate::element::Element;
+        use crate::element::ElementFeature;
 
         let mut e = Element::from_mesh(unit_quad(), "plate_0");
         e.set_insertion_vectors(vec![Vector::new(0.0, 0.0, 1.0), Vector::new(1.0, 0.0, 0.0)]);
@@ -846,8 +846,8 @@ pub fn run_element_features_round_trip() -> TestResult {
 
 pub fn run_element_dimensions_are_nominal_not_measured() -> TestResult {
     MINI_TEST!("Dimensions Are Nominal Not Measured", {
-        use crate::element::Element;
         use crate::Vector;
+        use crate::element::Element;
 
         let mut e = Element::from_mesh(unit_quad(), "plate");
 
@@ -937,9 +937,9 @@ pub fn run_element_unknown_type_survives_resave() -> TestResult {
 
 pub fn run_element_duplicate_keeps_every_field() -> TestResult {
     MINI_TEST!("Duplicate Keeps Every Field", {
+        use crate::Vector;
         use crate::element::Element;
         use crate::element::ElementFeature;
-        use crate::Vector;
 
         let mut e = Element::from_mesh(unit_quad(), "original");
         e.set_insertion_vectors(vec![Vector::new(0.0, 0.0, 1.0)]);
@@ -960,8 +960,8 @@ pub fn run_element_duplicate_keeps_every_field() -> TestResult {
 
 pub fn run_element_equality_compares_carried_fields() -> TestResult {
     MINI_TEST!("Equality Compares Carried Fields", {
-        use crate::element::Element;
         use crate::Vector;
+        use crate::element::Element;
 
         let a = Element::from_mesh(unit_quad(), "same");
         let mut b = Element::from_mesh(unit_quad(), "same");
@@ -1002,9 +1002,9 @@ pub fn run_element_is_visible_round_trip() -> TestResult {
 // ═══════════════════════════════════════════════════════════════════════════
 pub fn run_element_feature_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
-        use crate::element::ElementFeature;
         use crate::Point;
         use crate::Polyline;
+        use crate::element::ElementFeature;
 
         let outline = Polyline::new(vec![
             Point::new(0.0, 0.0, 0.0),
@@ -1047,9 +1047,9 @@ pub fn run_element_feature_constructor() -> TestResult {
 
 pub fn run_element_feature_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
-        use crate::element::ElementFeature;
         use crate::Point;
         use crate::Polyline;
+        use crate::element::ElementFeature;
 
         let mut f = ElementFeature::new(
             "cut",
@@ -1079,9 +1079,9 @@ pub fn run_element_feature_json_roundtrip() -> TestResult {
 
 pub fn run_element_feature_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
-        use crate::element::ElementFeature;
         use crate::Point;
         use crate::Polyline;
+        use crate::element::ElementFeature;
 
         let mut f = ElementFeature::new(
             "drill",

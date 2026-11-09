@@ -8,8 +8,8 @@ use crate::nurbsknot::CurveNurbsKnotStyle;
 use crate::nurbssurface::NurbsSurface;
 use crate::plane::Plane;
 use crate::point::Point;
-use crate::tolerance::Tolerance;
 use crate::tolerance::PI;
+use crate::tolerance::Tolerance;
 use crate::vector::Vector;
 use crate::xform::Xform;
 
@@ -137,8 +137,16 @@ fn surface_mid_grid(
 /// Sorted union of two nurbsknot vectors, equal values kept once.
 /// Within this of each other two nurbsknots of the vectors are one knot: 1e-7 of the wider span, above what insert_nurbsknot treats as the same knot, so a knot nearly on another is never inserted beside it
 fn nurbsknot_tolerance(a: &[f64], b: &[f64]) -> f64 {
-    let span_a = if a.is_empty() { 0.0 } else { a[a.len() - 1] - a[0] };
-    let span_b = if b.is_empty() { 0.0 } else { b[b.len() - 1] - b[0] };
+    let span_a = if a.is_empty() {
+        0.0
+    } else {
+        a[a.len() - 1] - a[0]
+    };
+    let span_b = if b.is_empty() {
+        0.0
+    } else {
+        b[b.len() - 1] - b[0]
+    };
 
     1e-7 * span_a.max(span_b)
 }
@@ -294,7 +302,11 @@ fn resample_curves(curves: &mut [NurbsCurve]) -> bool {
             points.push(c.point_at(k as f64 / (count - 1) as f64));
         }
 
-        *c = NurbsCurve::create_interpolated(&points, CurveNurbsKnotStyle::Uniform, CurveInterpStyle::Rhino);
+        *c = NurbsCurve::create_interpolated(
+            &points,
+            CurveNurbsKnotStyle::Uniform,
+            CurveInterpStyle::Rhino,
+        );
 
         if !c.is_valid() || !c.set_domain(0.0, 1.0) {
             return false;
@@ -679,11 +691,7 @@ fn shape_plane(shape: &NurbsCurve) -> Plane {
 fn shape_width(shape: &NurbsCurve) -> f64 {
     let width = shape.point_at_start().distance(&shape.point_at_end(), None);
 
-    if width < 1e-14 {
-        1.0
-    } else {
-        width
-    }
+    if width < 1e-14 { 1.0 } else { width }
 }
 
 /// Source plane onto the rail points p1 and p2, x toward p2, scaled from width to the rail distance.

@@ -1,16 +1,16 @@
-use crate::mini_test::TestResult;
-use crate::tolerance::TOLERANCE;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::TOLERANCE;
 
 pub fn run_instance_ref_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
-        use crate::element::ElementFeature;
         use crate::InstanceRef;
         use crate::Point;
         use crate::Polyline;
         use crate::Xform;
+        use crate::element::ElementFeature;
 
         let x = Xform::translation(10.0, 20.0, 30.0);
         let inst = InstanceRef::new("def-123", x.clone());
@@ -77,11 +77,11 @@ pub fn run_instance_ref_transformation() -> TestResult {
 
 pub fn run_instance_ref_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
-        use crate::element::ElementFeature;
         use crate::InstanceRef;
         use crate::Point;
         use crate::Polyline;
         use crate::Xform;
+        use crate::element::ElementFeature;
 
         let mut inst = InstanceRef::new("def-abc", Xform::translation(1.0, 2.0, 3.0));
         inst.name = "test_ref".to_string();
@@ -134,12 +134,12 @@ pub fn run_instance_ref_json_roundtrip() -> TestResult {
 
 pub fn run_instance_ref_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
-        use crate::element::ElementFeature;
         use crate::Color;
         use crate::InstanceRef;
         use crate::Point;
         use crate::Polyline;
         use crate::Xform;
+        use crate::element::ElementFeature;
 
         let fresh = InstanceRef::default();
         let fresh_proto = fresh.to_proto();

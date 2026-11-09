@@ -1,8 +1,8 @@
-use crate::mini_test::TestResult;
-use crate::tolerance::PI;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::PI;
 
 pub fn run_convex_hull_hull_2d() -> TestResult {
     MINI_TEST!("Hull 2d", {

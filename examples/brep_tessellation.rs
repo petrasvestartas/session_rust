@@ -23,7 +23,11 @@ struct Stats {
 }
 
 fn key(p: &Point) -> (u64, u64, u64) {
-    ((p[0] + 0.0).to_bits(), (p[1] + 0.0).to_bits(), (p[2] + 0.0).to_bits())
+    (
+        (p[0] + 0.0).to_bits(),
+        (p[1] + 0.0).to_bits(),
+        (p[2] + 0.0).to_bits(),
+    )
 }
 
 fn triangle_angles(a: &Point, b: &Point, c: &Point) -> [f64; 3] {
@@ -120,7 +124,10 @@ fn measure(fms: &[Mesh], stats: &mut Stats, verbose: bool) {
         }
 
         if verbose {
-            println!("  face {fi:>3} tris {face_tris:>6} min_angle {face_min:>6.2} verts {:>5}", fm.vertex.len());
+            println!(
+                "  face {fi:>3} tris {face_tris:>6} min_angle {face_min:>6.2} verts {:>5}",
+                fm.vertex.len()
+            );
         }
     }
 
@@ -133,8 +140,19 @@ fn measure(fms: &[Mesh], stats: &mut Stats, verbose: bool) {
             stats.open_edges += 1;
 
             if verbose {
-                let p = |k: &(u64, u64, u64)| Point::new(f64::from_bits(k.0), f64::from_bits(k.1), f64::from_bits(k.2));
-                println!("  open edge face {} {} -> {} ({count} vs {reverse})", owner[&(*a, *b)], p(a), p(b));
+                let p = |k: &(u64, u64, u64)| {
+                    Point::new(
+                        f64::from_bits(k.0),
+                        f64::from_bits(k.1),
+                        f64::from_bits(k.2),
+                    )
+                };
+                println!(
+                    "  open edge face {} {} -> {} ({count} vs {reverse})",
+                    owner[&(*a, *b)],
+                    p(a),
+                    p(b)
+                );
             }
         }
     }
@@ -215,10 +233,19 @@ fn main() {
         ("sphere", BRep::create_sphere(2.0)),
         ("cone", BRep::create_cone(2.0, 5.0)),
         ("torus", BRep::create_torus(4.0, 1.0)),
-        ("block_with_hole", BRep::create_block_with_hole(8.0, 6.0, 4.0, 1.5)),
+        (
+            "block_with_hole",
+            BRep::create_block_with_hole(8.0, 6.0, 4.0, 1.5),
+        ),
         ("cylinder_r150_h400", BRep::create_cylinder(150.0, 400.0)),
-        ("box100_bore_r10", BRep::create_block_with_hole(100.0, 100.0, 50.0, 10.0)),
-        ("rib4000_bore_r10", BRep::create_block_with_hole(4000.0, 200.0, 100.0, 10.0)),
+        (
+            "box100_bore_r10",
+            BRep::create_block_with_hole(100.0, 100.0, 50.0, 10.0),
+        ),
+        (
+            "rib4000_bore_r10",
+            BRep::create_block_with_hole(4000.0, 200.0, 100.0, 10.0),
+        ),
     ];
 
     for (label, b) in &cases {

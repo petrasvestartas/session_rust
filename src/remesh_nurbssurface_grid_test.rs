@@ -1,9 +1,9 @@
 #![allow(clippy::needless_range_loop)]
-use crate::mini_test::TestResult;
-use crate::tolerance::Tolerance;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::Tolerance;
 
 pub fn run_remesh_nurbssurface_grid_singular_planar_normal() -> TestResult {
     MINI_TEST!("Singular Planar Normal", {

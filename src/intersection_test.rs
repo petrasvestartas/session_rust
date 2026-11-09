@@ -1,8 +1,8 @@
-use crate::mini_test::TestResult;
-use crate::tolerance::TOLERANCE;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::TOLERANCE;
 
 /// Worst 3D distance from the pcurve lifted onto the surface to the section curve.
 fn lies_on_curve(
@@ -168,9 +168,9 @@ fn distance_slanted(p: &crate::Point) -> f64 {
 
 pub fn run_intersection_line_line() -> TestResult {
     MINI_TEST!("Line Line", {
-        use crate::intersection;
         use crate::Line;
         use crate::Tolerance;
+        use crate::intersection;
 
         let line0 = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
         let line1 = Line::new(0.5, -1.0, 0.0, 0.5, 1.0, 0.0);
@@ -188,9 +188,9 @@ pub fn run_intersection_line_line() -> TestResult {
 
 pub fn run_intersection_line_line_parallel() -> TestResult {
     MINI_TEST!("Line Line Parallel", {
-        use crate::intersection;
         use crate::Line;
         use crate::Tolerance;
+        use crate::intersection;
 
         let line0 = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
         let line1 = Line::new(0.0, 1.0, 0.0, 1.0, 1.0, 0.0);
@@ -202,9 +202,9 @@ pub fn run_intersection_line_line_parallel() -> TestResult {
 
 pub fn run_intersection_line_line_parameters() -> TestResult {
     MINI_TEST!("Line Line Parameters", {
-        use crate::intersection;
         use crate::Line;
         use crate::Tolerance;
+        use crate::intersection;
 
         let line0 = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
         let line1 = Line::new(0.5, -1.0, 0.0, 0.5, 1.0, 0.0);
@@ -227,9 +227,9 @@ pub fn run_intersection_line_line_parameters() -> TestResult {
 
 pub fn run_intersection_line_line_parameters_endpoints() -> TestResult {
     MINI_TEST!("Line Line Parameters Endpoints", {
-        use crate::intersection;
         use crate::Line;
         use crate::Tolerance;
+        use crate::intersection;
 
         let line0 = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
         let line1 = Line::new(0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
@@ -252,9 +252,9 @@ pub fn run_intersection_line_line_parameters_endpoints() -> TestResult {
 
 pub fn run_intersection_line_line_parameters_infinite() -> TestResult {
     MINI_TEST!("Line Line Parameters Infinite", {
-        use crate::intersection;
         use crate::Line;
         use crate::Tolerance;
+        use crate::intersection;
 
         let line0 = Line::new(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
         let line1 = Line::new(2.0, -1.0, 0.0, 2.0, 1.0, 0.0);
@@ -276,10 +276,10 @@ pub fn run_intersection_line_line_parameters_infinite() -> TestResult {
 
 pub fn run_intersection_plane_plane() -> TestResult {
     MINI_TEST!("Plane Plane", {
-        use crate::intersection;
         use crate::Plane;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection;
 
         let p0 = Point::new(0.0, 0.0, 0.0);
         let n0 = Vector::new(0.0, 0.0, 1.0);
@@ -303,10 +303,10 @@ pub fn run_intersection_plane_plane() -> TestResult {
 
 pub fn run_intersection_plane_plane_complex() -> TestResult {
     MINI_TEST!("Plane Plane Complex", {
-        use crate::intersection;
         use crate::Plane;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection;
 
         let plane_origin_0 = Point::new(213.787107, 513.797811, -24.743845);
         let plane_xaxis_0 = Vector::new(0.907673, -0.258819, 0.330366);
@@ -339,10 +339,10 @@ pub fn run_intersection_plane_plane_complex() -> TestResult {
 
 pub fn run_intersection_plane_plane_to_line_canonical() -> TestResult {
     MINI_TEST!("Plane Plane To Line Canonical", {
-        use crate::intersection;
         use crate::Plane;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection;
 
         let p0 = Point::new(0.0, 0.0, 2.0);
         let n0 = Vector::new(0.0, 0.0, 1.0);
@@ -372,11 +372,11 @@ pub fn run_intersection_plane_plane_to_line_canonical() -> TestResult {
 
 pub fn run_intersection_line_plane() -> TestResult {
     MINI_TEST!("Line Plane", {
-        use crate::intersection;
         use crate::Line;
         use crate::Plane;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection;
 
         let p = Point::new(0.0, 0.0, 1.0);
         let n = Vector::new(0.0, 0.0, 1.0);
@@ -398,11 +398,11 @@ pub fn run_intersection_line_plane() -> TestResult {
 
 pub fn run_intersection_line_plane_parallel() -> TestResult {
     MINI_TEST!("Line Plane Parallel", {
-        use crate::intersection;
         use crate::Line;
         use crate::Plane;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection;
 
         let p = Point::new(0.0, 0.0, 1.0);
         let n = Vector::new(0.0, 0.0, 1.0);
@@ -418,11 +418,11 @@ pub fn run_intersection_line_plane_parallel() -> TestResult {
 
 pub fn run_intersection_line_plane_real_world() -> TestResult {
     MINI_TEST!("Line Plane Real World", {
-        use crate::intersection;
         use crate::Line;
         use crate::Plane;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection;
 
         let l0 = Line::new(500.000, -573.576, -819.152, 500.000, 573.576, 819.152);
 
@@ -445,10 +445,10 @@ pub fn run_intersection_line_plane_real_world() -> TestResult {
 
 pub fn run_intersection_plane_plane_plane() -> TestResult {
     MINI_TEST!("Plane Plane Plane", {
-        use crate::intersection;
         use crate::Plane;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection;
 
         let plane_origin_0 = Point::new(213.787107, 513.797811, -24.743845);
         let plane_xaxis_0 = Vector::new(0.907673, -0.258819, 0.330366);
@@ -479,10 +479,10 @@ pub fn run_intersection_plane_plane_plane() -> TestResult {
 
 pub fn run_intersection_plane_plane_plane_parallel() -> TestResult {
     MINI_TEST!("Plane Plane Plane Parallel", {
-        use crate::intersection;
         use crate::Plane;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection;
 
         let p0 = Point::new(0.0, 0.0, 0.0);
         let n0 = Vector::new(0.0, 0.0, 1.0);
@@ -504,10 +504,10 @@ pub fn run_intersection_plane_plane_plane_parallel() -> TestResult {
 
 pub fn run_intersection_ray_box() -> TestResult {
     MINI_TEST!("Ray Box", {
-        use crate::intersection;
+        use crate::OBB;
         use crate::Point;
         use crate::Vector;
-        use crate::OBB;
+        use crate::intersection;
 
         let center = Point::new(0.0, 0.0, 0.0);
         let x_axis = Vector::new(1.0, 0.0, 0.0);
@@ -530,10 +530,10 @@ pub fn run_intersection_ray_box() -> TestResult {
 
 pub fn run_intersection_ray_box_miss() -> TestResult {
     MINI_TEST!("Ray Box Miss", {
-        use crate::intersection;
+        use crate::OBB;
         use crate::Point;
         use crate::Vector;
-        use crate::OBB;
+        use crate::intersection;
 
         let center = Point::new(0.0, 0.0, 0.0);
         let x_axis = Vector::new(1.0, 0.0, 0.0);
@@ -554,9 +554,9 @@ pub fn run_intersection_ray_box_miss() -> TestResult {
 
 pub fn run_intersection_ray_sphere() -> TestResult {
     MINI_TEST!("Ray Sphere", {
-        use crate::intersection;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection;
 
         let origin = Point::new(-5.0, 0.0, 0.0);
         let direction = Vector::new(1.0, 0.0, 0.0);
@@ -574,9 +574,9 @@ pub fn run_intersection_ray_sphere() -> TestResult {
 
 pub fn run_intersection_ray_sphere_tangent() -> TestResult {
     MINI_TEST!("Ray Sphere Tangent", {
-        use crate::intersection;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection;
 
         let origin = Point::new(-5.0, 2.0, 0.0);
         let direction = Vector::new(1.0, 0.0, 0.0);
@@ -593,9 +593,9 @@ pub fn run_intersection_ray_sphere_tangent() -> TestResult {
 
 pub fn run_intersection_ray_sphere_miss() -> TestResult {
     MINI_TEST!("Ray Sphere Miss", {
-        use crate::intersection;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection;
 
         let origin = Point::new(-5.0, 5.0, 0.0);
         let direction = Vector::new(1.0, 0.0, 0.0);
@@ -611,9 +611,9 @@ pub fn run_intersection_ray_sphere_miss() -> TestResult {
 
 pub fn run_intersection_ray_triangle() -> TestResult {
     MINI_TEST!("Ray Triangle", {
-        use crate::intersection;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection;
 
         let origin = Point::new(0.5, 0.5, -1.0);
         let direction = Vector::new(0.0, 0.0, 1.0);
@@ -633,9 +633,9 @@ pub fn run_intersection_ray_triangle() -> TestResult {
 
 pub fn run_intersection_ray_triangle_miss() -> TestResult {
     MINI_TEST!("Ray Triangle Miss", {
-        use crate::intersection;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection;
 
         let origin = Point::new(2.0, 2.0, -1.0);
         let direction = Vector::new(0.0, 0.0, 1.0);
@@ -653,9 +653,9 @@ pub fn run_intersection_ray_triangle_miss() -> TestResult {
 
 pub fn run_intersection_ray_triangle_parallel() -> TestResult {
     MINI_TEST!("Ray Triangle Parallel", {
-        use crate::intersection;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection;
 
         let origin = Point::new(0.5, 0.5, -1.0);
         let direction = Vector::new(1.0, 0.0, 0.0);
@@ -674,11 +674,11 @@ pub fn run_intersection_ray_triangle_parallel() -> TestResult {
 
 pub fn run_intersection_ray_mesh() -> TestResult {
     MINI_TEST!("Ray Mesh", {
-        use crate::intersection;
         use crate::Mesh;
         use crate::Point;
         use crate::Tolerance;
         use crate::Vector;
+        use crate::intersection;
 
         let polygons: Vec<Vec<Point>> = vec![
             vec![
@@ -716,11 +716,11 @@ pub fn run_intersection_ray_mesh() -> TestResult {
 
 pub fn run_intersection_ray_mesh_first() -> TestResult {
     MINI_TEST!("Ray Mesh First", {
-        use crate::intersection;
         use crate::Mesh;
         use crate::Point;
         use crate::Tolerance;
         use crate::Vector;
+        use crate::intersection;
 
         let polygons: Vec<Vec<Point>> = vec![
             vec![
@@ -757,11 +757,11 @@ pub fn run_intersection_ray_mesh_first() -> TestResult {
 
 pub fn run_intersection_ray_mesh_miss() -> TestResult {
     MINI_TEST!("Ray Mesh Miss", {
-        use crate::intersection;
         use crate::Mesh;
         use crate::Point;
         use crate::Tolerance;
         use crate::Vector;
+        use crate::intersection;
 
         let polygons: Vec<Vec<Point>> = vec![vec![
             Point::new(0.0, 0.0, 0.0),
@@ -790,11 +790,11 @@ pub fn run_intersection_ray_mesh_miss() -> TestResult {
 
 pub fn run_intersection_ray_mesh_bvh() -> TestResult {
     MINI_TEST!("Ray Mesh Bvh", {
-        use crate::intersection;
         use crate::Mesh;
         use crate::Point;
         use crate::Tolerance;
         use crate::Vector;
+        use crate::intersection;
 
         let polygons: Vec<Vec<Point>> = vec![
             vec![
@@ -832,11 +832,11 @@ pub fn run_intersection_ray_mesh_bvh() -> TestResult {
 
 pub fn run_intersection_ray_mesh_bvh_first() -> TestResult {
     MINI_TEST!("Ray Mesh Bvh First", {
-        use crate::intersection;
         use crate::Mesh;
         use crate::Point;
         use crate::Tolerance;
         use crate::Vector;
+        use crate::intersection;
 
         let polygons: Vec<Vec<Point>> = vec![
             vec![
@@ -873,11 +873,11 @@ pub fn run_intersection_ray_mesh_bvh_first() -> TestResult {
 
 pub fn run_intersection_ray_mesh_bvh_miss() -> TestResult {
     MINI_TEST!("Ray Mesh Bvh Miss", {
-        use crate::intersection;
         use crate::Mesh;
         use crate::Point;
         use crate::Tolerance;
         use crate::Vector;
+        use crate::intersection;
 
         let polygons: Vec<Vec<Point>> = vec![vec![
             Point::new(0.0, 0.0, 0.0),
@@ -906,11 +906,11 @@ pub fn run_intersection_ray_mesh_bvh_miss() -> TestResult {
 
 pub fn run_intersection_ray_mesh_bvh_vs_naive() -> TestResult {
     MINI_TEST!("Ray Mesh Bvh Vs Naive", {
-        use crate::intersection;
         use crate::Mesh;
         use crate::Point;
         use crate::Tolerance;
         use crate::Vector;
+        use crate::intersection;
 
         let mut polygons: Vec<Vec<Point>> = Vec::new();
 
@@ -961,10 +961,10 @@ pub fn run_intersection_ray_mesh_bvh_vs_naive() -> TestResult {
 
 pub fn run_intersection_ray_box_real_world() -> TestResult {
     MINI_TEST!("Ray Box Real World", {
-        use crate::intersection;
         use crate::Line;
-        use crate::Point;
         use crate::OBB;
+        use crate::Point;
+        use crate::intersection;
 
         let l0 = Line::new(500.0, -573.576, -819.152, 500.0, 573.576, 819.152);
         let min_pt = Point::new(214.0, 192.0, 484.0);
@@ -988,9 +988,9 @@ pub fn run_intersection_ray_box_real_world() -> TestResult {
 
 pub fn run_intersection_ray_sphere_real_world() -> TestResult {
     MINI_TEST!("Ray Sphere Real World", {
-        use crate::intersection;
         use crate::Line;
         use crate::Point;
+        use crate::intersection;
 
         let l0 = Line::new(500.0, -573.576, -819.152, 500.0, 573.576, 819.152);
         let sphere_center = Point::new(457.0, 192.0, 207.0);
@@ -1013,10 +1013,10 @@ pub fn run_intersection_ray_sphere_real_world() -> TestResult {
 
 pub fn run_intersection_ray_triangle_real_world() -> TestResult {
     MINI_TEST!("Ray Triangle Real World", {
-        use crate::intersection;
         use crate::Line;
         use crate::Point;
         use crate::Tolerance;
+        use crate::intersection;
 
         let l0 = Line::new(500.0, -573.576, -819.152, 500.0, 573.576, 819.152);
         let p1 = Point::new(214.0, 567.0, 484.0);
@@ -1036,11 +1036,11 @@ pub fn run_intersection_ray_triangle_real_world() -> TestResult {
 
 pub fn run_intersection_curve_plane() -> TestResult {
     MINI_TEST!("Curve Plane", {
-        use crate::intersection;
         use crate::Plane;
         use crate::Point;
         use crate::Primitives;
         use crate::Vector;
+        use crate::intersection;
 
         let circle = Primitives::circle(0.0, 0.0, 0.0, 2.0);
         let origin = Point::new(1.0, 0.0, 0.0);
@@ -1071,11 +1071,11 @@ pub fn run_intersection_curve_plane() -> TestResult {
 
 pub fn run_intersection_curve_plane_bezier_clipping() -> TestResult {
     MINI_TEST!("Curve Plane Bezier Clipping", {
-        use crate::intersection;
         use crate::Plane;
         use crate::Point;
         use crate::Primitives;
         use crate::Vector;
+        use crate::intersection;
 
         let circle = Primitives::circle(0.0, 0.0, 0.0, 2.0);
         let origin = Point::new(1.0, 0.0, 0.0);
@@ -1100,12 +1100,12 @@ pub fn run_intersection_curve_plane_bezier_clipping() -> TestResult {
 
 pub fn run_intersection_curve_plane_algebraic() -> TestResult {
     MINI_TEST!("Curve Plane Algebraic", {
-        use crate::intersection;
         use crate::NurbsCurve;
         use crate::Plane;
         use crate::Point;
         use crate::Primitives;
         use crate::Vector;
+        use crate::intersection;
 
         let curve = NurbsCurve::create(
             false,
@@ -1136,11 +1136,11 @@ pub fn run_intersection_curve_plane_algebraic() -> TestResult {
 
 pub fn run_intersection_curve_plane_production() -> TestResult {
     MINI_TEST!("Curve Plane Production", {
-        use crate::intersection;
         use crate::Plane;
         use crate::Point;
         use crate::Primitives;
         use crate::Vector;
+        use crate::intersection;
 
         let circle = Primitives::circle(0.0, 0.0, 0.0, 2.0);
         let origin = Point::new(1.0, 0.0, 0.0);
@@ -1158,9 +1158,9 @@ pub fn run_intersection_curve_plane_production() -> TestResult {
 
 pub fn run_intersection_curve_closest_point() -> TestResult {
     MINI_TEST!("Curve Closest Point", {
-        use crate::intersection;
         use crate::Point;
         use crate::Primitives;
+        use crate::intersection;
 
         let circle = Primitives::circle(0.0, 0.0, 0.0, 2.0);
         let test_point = Point::new(3.0, 0.0, 0.0);
@@ -1175,11 +1175,11 @@ pub fn run_intersection_curve_closest_point() -> TestResult {
 
 pub fn run_intersection_surface_plane() -> TestResult {
     MINI_TEST!("Surface Plane", {
-        use crate::intersection;
         use crate::NurbsSurface;
         use crate::Plane;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection;
 
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
@@ -1209,11 +1209,11 @@ pub fn run_intersection_surface_plane() -> TestResult {
 
 pub fn run_intersection_surface_plane_curved() -> TestResult {
     MINI_TEST!("Surface Plane Curved", {
-        use crate::intersection;
         use crate::NurbsSurface;
         use crate::Plane;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection;
 
         let mut pts = Vec::new();
 
@@ -1252,11 +1252,11 @@ pub fn run_intersection_surface_plane_curved() -> TestResult {
 
 pub fn run_intersection_surface_plane_miss() -> TestResult {
     MINI_TEST!("Surface Plane Miss", {
-        use crate::intersection;
         use crate::NurbsSurface;
         use crate::Plane;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection;
 
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
@@ -1275,11 +1275,11 @@ pub fn run_intersection_surface_plane_miss() -> TestResult {
 
 pub fn run_intersection_surface_plane_uv() -> TestResult {
     MINI_TEST!("Surface Plane UV", {
-        use crate::intersection;
         use crate::Plane;
         use crate::Point;
         use crate::Primitives;
         use crate::Vector;
+        use crate::intersection;
 
         let cyl = Primitives::cylinder_surface(0.0, 0.0, 0.0, 1.0, 4.0);
         let plane =
@@ -1351,10 +1351,10 @@ pub fn run_intersection_surface_plane_uv() -> TestResult {
 
 pub fn run_intersection_surface_surface() -> TestResult {
     MINI_TEST!("Surface Surface", {
-        use crate::intersection;
         use crate::NurbsSurface;
         use crate::Point;
         use crate::Primitives;
+        use crate::intersection;
 
         let flat = NurbsSurface::create(
             false,
@@ -1440,10 +1440,10 @@ pub fn run_intersection_surface_surface() -> TestResult {
 
 pub fn run_intersection_surface_surface_accuracy() -> TestResult {
     MINI_TEST!("Surface Surface Accuracy", {
-        use crate::intersection::surface_surface;
         use crate::NurbsSurface;
         use crate::Point;
         use crate::Primitives;
+        use crate::intersection::surface_surface;
 
         let sphere = Primitives::sphere_surface(0.0, 0.0, 0.0, 2.0);
         let cyl = Primitives::cylinder_surface(1.3, 0.0, -3.0, 0.3, 6.0);
@@ -1492,8 +1492,8 @@ pub fn run_intersection_surface_surface_accuracy() -> TestResult {
 
 pub fn run_intersection_surface_surface_planes() -> TestResult {
     MINI_TEST!("Surface Surface Planes", {
-        use crate::intersection::surface_surface;
         use crate::Point;
+        use crate::intersection::surface_surface;
 
         let flat = bilinear(
             Point::new(-3.0, -3.0, 0.5),
@@ -1539,9 +1539,9 @@ pub fn run_intersection_surface_surface_planes() -> TestResult {
 
 pub fn run_intersection_surface_surface_plane_cone() -> TestResult {
     MINI_TEST!("Surface Surface Plane Cone", {
-        use crate::intersection::surface_surface;
         use crate::Point;
         use crate::Primitives;
+        use crate::intersection::surface_surface;
 
         let cone = Primitives::cone_surface(0.0, 0.0, 0.0, 1.5, 3.0);
         let flat = bilinear(
@@ -1604,9 +1604,9 @@ pub fn run_intersection_surface_surface_plane_cone() -> TestResult {
 
 pub fn run_intersection_surface_surface_plane_torus() -> TestResult {
     MINI_TEST!("Surface Surface Plane Torus", {
-        use crate::intersection::surface_surface;
         use crate::Point;
         use crate::Primitives;
+        use crate::intersection::surface_surface;
 
         let torus = Primitives::torus_surface(0.0, 0.0, 0.0, 2.0, 0.5);
         let wall = bilinear(
@@ -1629,11 +1629,11 @@ pub fn run_intersection_surface_surface_plane_torus() -> TestResult {
 
 pub fn run_intersection_surface_surface_cylinders() -> TestResult {
     MINI_TEST!("Surface Surface Cylinders", {
-        use crate::intersection::surface_surface;
         use crate::Primitives;
         use crate::Tolerance;
         use crate::Vector;
         use crate::Xform;
+        use crate::intersection::surface_surface;
 
         let cyl = Primitives::cylinder_surface(0.0, 0.0, -2.0, 1.0, 4.0);
         let beside = Primitives::cylinder_surface(1.5, 0.0, -2.0, 1.0, 4.0);
@@ -1669,8 +1669,8 @@ pub fn run_intersection_surface_surface_cylinders() -> TestResult {
 
 pub fn run_intersection_surface_surface_coaxial_quadrics() -> TestResult {
     MINI_TEST!("Surface Surface Coaxial Quadrics", {
-        use crate::intersection::surface_surface;
         use crate::Primitives;
+        use crate::intersection::surface_surface;
 
         let sphere = Primitives::sphere_surface(0.0, 0.0, 0.0, 2.0);
         let cyl = Primitives::cylinder_surface(0.0, 0.0, -2.0, 1.0, 4.0);
@@ -1705,8 +1705,8 @@ pub fn run_intersection_surface_surface_coaxial_quadrics() -> TestResult {
 
 pub fn run_intersection_surface_surface_coaxial_tori() -> TestResult {
     MINI_TEST!("Surface Surface Coaxial Tori", {
-        use crate::intersection::surface_surface;
         use crate::Primitives;
+        use crate::intersection::surface_surface;
 
         let torus = Primitives::torus_surface(0.0, 0.0, 0.0, 2.0, 0.5);
         let wide_cyl = Primitives::cylinder_surface(0.0, 0.0, -2.0, 2.2, 4.0);
@@ -1754,10 +1754,10 @@ pub fn run_intersection_surface_surface_coaxial_tori() -> TestResult {
 
 pub fn run_intersection_cut_curves_on_surface() -> TestResult {
     MINI_TEST!("Cut Curves On Surface", {
-        use crate::intersection;
         use crate::NurbsSurface;
         use crate::Point;
         use crate::Primitives;
+        use crate::intersection;
 
         let flat = NurbsSurface::create(
             false,
@@ -1794,9 +1794,9 @@ pub fn run_intersection_cut_curves_on_surface() -> TestResult {
 
 pub fn run_intersection_cut_curves_on_surface_pullbacks() -> TestResult {
     MINI_TEST!("Cut Curves On Surface Pullbacks", {
-        use crate::intersection::cut_curves_on_surface;
         use crate::Point;
         use crate::Primitives;
+        use crate::intersection::cut_curves_on_surface;
 
         let sphere = Primitives::sphere_surface(0.0, 0.0, 0.0, 2.0);
         let cone = Primitives::cone_surface(0.0, 0.0, 0.0, 1.5, 3.0);
@@ -1840,9 +1840,9 @@ pub fn run_intersection_cut_curves_on_surface_pullbacks() -> TestResult {
 
 pub fn run_intersection_cut_curves_on_surface_torus() -> TestResult {
     MINI_TEST!("Cut Curves On Surface Torus", {
-        use crate::intersection::cut_curves_on_surface;
         use crate::Point;
         use crate::Primitives;
+        use crate::intersection::cut_curves_on_surface;
 
         let torus = Primitives::torus_surface(0.0, 0.0, 0.0, 2.0, 0.5);
         let wall = bilinear(
@@ -1863,9 +1863,9 @@ pub fn run_intersection_cut_curves_on_surface_torus() -> TestResult {
 
 pub fn run_intersection_cut_curves_slanted_cutter() -> TestResult {
     MINI_TEST!("Cut Curves Slanted Cutter", {
-        use crate::intersection::cut_curves_on_surface;
         use crate::Point;
         use crate::Primitives;
+        use crate::intersection::cut_curves_on_surface;
 
         let cone = Primitives::cone_surface(0.0, 0.0, 0.0, 1.5, 3.0);
         let slanted = bilinear(
@@ -1889,8 +1889,8 @@ pub fn run_intersection_cut_curves_slanted_cutter() -> TestResult {
 
 pub fn run_intersection_cut_curves_plane_trapezoid() -> TestResult {
     MINI_TEST!("Cut Curves Plane Trapezoid", {
-        use crate::intersection::cut_curves_on_surface;
         use crate::Point;
+        use crate::intersection::cut_curves_on_surface;
 
         let trapezoid = bilinear(
             Point::new(-3.0, -3.0, 0.0),
@@ -1952,9 +1952,9 @@ pub fn run_intersection_remap() -> TestResult {
 
 pub fn run_intersection_closest_point_on_segment() -> TestResult {
     MINI_TEST!("Closest Point On Segment", {
-        use crate::intersection;
         use crate::Line;
         use crate::Point;
+        use crate::intersection;
 
         let seg = Line::new(0.0, 0.0, 0.0, 4.0, 0.0, 0.0);
         let pt = Point::new(2.0, 3.0, 0.0);
@@ -1974,9 +1974,9 @@ pub fn run_intersection_closest_point_on_segment() -> TestResult {
 
 pub fn run_intersection_plane_plane_plane_check_parallel() -> TestResult {
     MINI_TEST!("Plane Plane Plane Check Parallel", {
-        use crate::intersection;
         use crate::Plane;
         use crate::Vector;
+        use crate::intersection;
 
         let p0 = Plane::from_point_normal(
             crate::Point::new(0.0, 0.0, 0.0),
@@ -2025,10 +2025,10 @@ pub fn run_intersection_plane_plane_plane_check_parallel() -> TestResult {
 
 pub fn run_intersection_plane_4planes() -> TestResult {
     MINI_TEST!("Plane 4 Planes Closed", {
-        use crate::intersection;
         use crate::Plane;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection;
 
         let main =
             Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0), None);
@@ -2059,10 +2059,10 @@ pub fn run_intersection_plane_4planes() -> TestResult {
 
 pub fn run_intersection_plane_4planes_open() -> TestResult {
     MINI_TEST!("Plane 4 Planes Open", {
-        use crate::intersection;
         use crate::Plane;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection;
 
         let main =
             Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0), None);
@@ -2084,11 +2084,11 @@ pub fn run_intersection_plane_4planes_open() -> TestResult {
 
 pub fn run_intersection_plane_4lines() -> TestResult {
     MINI_TEST!("Plane 4 Lines", {
-        use crate::intersection;
         use crate::Line;
         use crate::Plane;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection;
 
         let plane =
             Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0), None);
@@ -2112,11 +2112,11 @@ pub fn run_intersection_plane_4lines() -> TestResult {
 
 pub fn run_intersection_line_two_planes() -> TestResult {
     MINI_TEST!("Line Two Planes", {
-        use crate::intersection;
         use crate::Line;
         use crate::Plane;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection;
 
         let line = Line::new(0.0, 0.0, -5.0, 0.0, 0.0, 5.0);
         let o0 = Point::new(0.0, 0.0, -1.0);
@@ -2137,10 +2137,10 @@ pub fn run_intersection_line_two_planes() -> TestResult {
 
 pub fn run_intersection_scale_vector_to_distance_of_2planes() -> TestResult {
     MINI_TEST!("Scale Vector To Distance Of 2 Planes", {
-        use crate::intersection;
         use crate::Plane;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection;
 
         let p0 =
             Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0), None);
@@ -2159,11 +2159,11 @@ pub fn run_intersection_scale_vector_to_distance_of_2planes() -> TestResult {
 
 pub fn run_intersection_polyline_plane() -> TestResult {
     MINI_TEST!("Polyline Plane", {
-        use crate::intersection;
         use crate::Plane;
         use crate::Point;
         use crate::Polyline;
         use crate::Vector;
+        use crate::intersection;
 
         let poly = Polyline::new(vec![
             Point::new(-1.0, -1.0, 0.0),
@@ -2191,8 +2191,8 @@ pub fn run_intersection_polyline_plane() -> TestResult {
 
 pub fn run_intersection_line_line_3d() -> TestResult {
     MINI_TEST!("Line Line 3D", {
-        use crate::intersection;
         use crate::Line;
+        use crate::intersection;
 
         let cutter = Line::new(0.0, 1.0, 0.0, 2.0, 1.0, 0.0);
         let seg = Line::new(1.0, 0.0, 0.0, 1.0, 2.0, 0.0);
@@ -2215,9 +2215,9 @@ pub fn run_intersection_line_line_3d() -> TestResult {
 
 pub fn run_intersection_polyline_boolean() -> TestResult {
     MINI_TEST!("Polyline Boolean", {
-        use crate::intersection;
         use crate::Point;
         use crate::Polyline;
+        use crate::intersection;
 
         let a = Polyline::new(vec![
             Point::new(0.0, 0.0, 0.0),
@@ -2252,10 +2252,10 @@ pub fn run_intersection_polyline_boolean() -> TestResult {
 
 pub fn run_intersection_offset_in_3d() -> TestResult {
     MINI_TEST!("Offset In 3D", {
-        use crate::intersection;
         use crate::Plane;
         use crate::Point;
         use crate::Polyline;
+        use crate::intersection;
 
         let mut square = Polyline::new(vec![
             Point::new(0.0, 0.0, 0.0),
@@ -2282,10 +2282,10 @@ pub fn run_intersection_offset_in_3d() -> TestResult {
 
 pub fn run_intersection_polyline_boolean_2d_in_plane() -> TestResult {
     MINI_TEST!("Polyline Boolean 2D In Plane", {
-        use crate::intersection;
         use crate::Plane;
         use crate::Point;
         use crate::Polyline;
+        use crate::intersection;
 
         let a = Polyline::new(vec![
             Point::new(0.0, 0.0, 1.0),
@@ -2327,11 +2327,11 @@ pub fn run_intersection_polyline_boolean_2d_in_plane() -> TestResult {
 
 pub fn run_intersection_polyline_plane_to_line() -> TestResult {
     MINI_TEST!("Polyline Plane To Line", {
-        use crate::intersection::polyline_plane_to_line;
         use crate::Plane;
         use crate::Point;
         use crate::Polyline;
         use crate::Vector;
+        use crate::intersection::polyline_plane_to_line;
         let poly = Polyline::new(vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(4.0, 0.0, 0.0),
@@ -2354,11 +2354,11 @@ pub fn run_intersection_polyline_plane_to_line() -> TestResult {
 
 pub fn run_intersection_quad_from_line_top_bottom_planes() -> TestResult {
     MINI_TEST!("Quad From Line Top Bottom Planes", {
-        use crate::intersection::quad_from_line_top_bottom_planes;
         use crate::Line;
         use crate::Plane;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection::quad_from_line_top_bottom_planes;
         let face = Plane::xy_plane();
         let line = Line::new(0.0, 0.0, 0.0, 10.0, 0.0, 0.0);
         let plane0 =
@@ -2380,10 +2380,10 @@ pub fn run_intersection_quad_from_line_top_bottom_planes() -> TestResult {
 
 pub fn run_intersection_orthogonal_vector_between_two_plane_pairs() -> TestResult {
     MINI_TEST!("Orthogonal Vector Between Two Plane Pairs", {
-        use crate::intersection::orthogonal_vector_between_two_plane_pairs;
         use crate::Plane;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection::orthogonal_vector_between_two_plane_pairs;
         let pp00 = Plane::xy_plane();
         let pp10 =
             Plane::from_point_normal(Point::new(0.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0), None);
@@ -2404,10 +2404,10 @@ pub fn run_intersection_orthogonal_vector_between_two_plane_pairs() -> TestResul
 
 pub fn run_intersection_closed_and_open_paths_2d() -> TestResult {
     MINI_TEST!("Closed And Open Paths 2D", {
-        use crate::intersection::closed_and_open_paths_2d;
         use crate::Plane;
         use crate::Point;
         use crate::Polyline;
+        use crate::intersection::closed_and_open_paths_2d;
         let plate = Polyline::new(vec![
             Point::new(0.0, 0.0, 0.0),
             Point::new(10.0, 0.0, 0.0),
@@ -2437,11 +2437,11 @@ pub fn run_intersection_closed_and_open_paths_2d() -> TestResult {
 
 pub fn run_intersection_face_to_face() -> TestResult {
     MINI_TEST!("Face To Face", {
-        use crate::intersection;
         use crate::Plane;
         use crate::Point;
         use crate::Polyline;
         use crate::Vector;
+        use crate::intersection;
 
         let polylines = vec![
             vec![
@@ -2518,10 +2518,10 @@ pub fn run_intersection_face_to_face() -> TestResult {
 
 pub fn run_intersection_adjacency_search() -> TestResult {
     MINI_TEST!("Adjacency Search", {
-        use crate::intersection;
         use crate::Element;
         use crate::Mesh;
         use crate::Point;
+        use crate::intersection;
 
         let a = Element::from_mesh(
             Mesh::from_polylines(
@@ -2572,10 +2572,10 @@ pub fn run_intersection_adjacency_search() -> TestResult {
 
 pub fn run_intersection_line_line_classified() -> TestResult {
     MINI_TEST!("Line Line Classified", {
-        use crate::intersection;
         use crate::Line;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection;
 
         let s0 = Line::new(-1.0, 0.0, 0.0, 1.0, 0.0, 0.0);
         let s1 = Line::new(0.0, -1.0, 0.0, 0.0, 1.0, 0.0);
@@ -2668,9 +2668,9 @@ pub fn run_intersection_line_line_classified() -> TestResult {
 
 pub fn run_intersection_plane_plane_optional() -> TestResult {
     MINI_TEST!("Plane Plane Optional", {
-        use crate::intersection;
         use crate::Plane;
         use crate::Vector;
+        use crate::intersection;
 
         let xy = Plane::xy_plane();
         let xz = Plane::xz_plane();
@@ -2685,11 +2685,11 @@ pub fn run_intersection_plane_plane_optional() -> TestResult {
 
 pub fn run_intersection_line_plane_optional() -> TestResult {
     MINI_TEST!("Line Plane Optional", {
-        use crate::intersection;
         use crate::Line;
         use crate::Plane;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection;
 
         let plane =
             Plane::from_point_normal(Point::new(0.0, 0.0, 1.0), Vector::new(0.0, 0.0, 1.0), None);
@@ -2710,10 +2710,10 @@ pub fn run_intersection_line_plane_optional() -> TestResult {
 
 pub fn run_intersection_plane_plane_plane_optional() -> TestResult {
     MINI_TEST!("Plane Plane Plane Optional", {
-        use crate::intersection;
         use crate::Plane;
         use crate::Point;
         use crate::Vector;
+        use crate::intersection;
 
         let xy =
             Plane::from_point_normal(Point::new(0.0, 0.0, 3.0), Vector::new(0.0, 0.0, 1.0), None);

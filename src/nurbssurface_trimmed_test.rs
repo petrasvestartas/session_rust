@@ -3,11 +3,11 @@
     clippy::excessive_precision,
     clippy::needless_range_loop
 )]
-use crate::mini_test::TestResult;
-use crate::tolerance::TOLERANCE;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::TOLERANCE;
 
 pub fn run_nurbssurface_trimmed_singular_planar_normal() -> TestResult {
     MINI_TEST!("Singular Planar Normal", {
@@ -314,10 +314,10 @@ pub fn run_nurbssurface_trimmed_constructor() -> TestResult {
 
 pub fn run_nurbssurface_trimmed_constructor_planar() -> TestResult {
     MINI_TEST!("Constructor Planar", {
-        use crate::tolerance::PI;
         use crate::NurbsCurve;
         use crate::NurbsSurfaceTrimmed;
         use crate::Point;
+        use crate::tolerance::PI;
 
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
@@ -427,12 +427,12 @@ pub fn run_nurbssurface_trimmed_constructor_planar() -> TestResult {
 
 pub fn run_nurbssurface_trimmed_constructor_hole() -> TestResult {
     MINI_TEST!("Constructor Hole", {
-        use crate::tolerance::PI;
         use crate::NurbsCurve;
         use crate::NurbsSurface;
         use crate::NurbsSurfaceTrimmed;
         use crate::Point;
         use crate::Primitives;
+        use crate::tolerance::PI;
 
         let n = 8;
         let mut pts = Vec::new();

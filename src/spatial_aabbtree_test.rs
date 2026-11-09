@@ -1,13 +1,13 @@
-use crate::mini_test::TestResult;
-use crate::tolerance::TOLERANCE;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::TOLERANCE;
 
 pub fn run_spatial_aabbtree_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
-        use crate::Closest;
         use crate::AABB;
+        use crate::Closest;
 
         let boxes = vec![
             AABB::new(0.0, 0.0, 0.0, 0.5, 0.5, 0.5),
@@ -43,8 +43,8 @@ pub fn run_spatial_aabbtree_build_empty() -> TestResult {
 
 pub fn run_spatial_aabbtree_build_single() -> TestResult {
     MINI_TEST!("Build Single", {
-        use crate::SpatialAABBTree;
         use crate::AABB;
+        use crate::SpatialAABBTree;
 
         let aabb = AABB::new(0.0, 0.0, 0.0, 1.0, 1.0, 1.0);
 
@@ -58,8 +58,8 @@ pub fn run_spatial_aabbtree_build_single() -> TestResult {
 
 pub fn run_spatial_aabbtree_build_multiple() -> TestResult {
     MINI_TEST!("Build Multiple", {
-        use crate::SpatialAABBTree;
         use crate::AABB;
+        use crate::SpatialAABBTree;
 
         let aabbs = vec![
             AABB::new(0.0, 0.0, 0.0, 1.0, 1.0, 1.0),
@@ -77,8 +77,8 @@ pub fn run_spatial_aabbtree_build_multiple() -> TestResult {
 
 pub fn run_spatial_aabbtree_node_count() -> TestResult {
     MINI_TEST!("Node Count", {
-        use crate::SpatialAABBTree;
         use crate::AABB;
+        use crate::SpatialAABBTree;
 
         let mut aabbs: Vec<AABB> = Vec::new();
 
@@ -134,8 +134,8 @@ pub fn run_spatial_aabbtree_mesh_point_aabb_matches_bvh() -> TestResult {
 
 pub fn run_spatial_aabbtree_query_aabb() -> TestResult {
     MINI_TEST!("Query Aabb", {
-        use crate::SpatialAABBTree;
         use crate::AABB;
+        use crate::SpatialAABBTree;
 
         let aabbs = vec![
             AABB::new(0.0, 0.0, 0.0, 0.5, 0.5, 0.5),

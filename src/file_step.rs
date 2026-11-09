@@ -1075,11 +1075,7 @@ fn plane_surface(a: &Axis2, u0: f64, u1: f64, v0: f64, v1: f64) -> NurbsSurface 
         && out.set_cv(1, 0, &axis_point(a, u1, v0, 0.0))
         && out.set_cv(1, 1, &axis_point(a, u1, v1, 0.0));
 
-    if ok {
-        out
-    } else {
-        NurbsSurface::default()
-    }
+    if ok { out } else { NurbsSurface::default() }
 }
 
 /// Rational cylinder patch on the quarter-arc chart (1 unit = 90 degrees) over [u0, u1] x [v0, v1]; a span of 4 closes it.
@@ -1637,11 +1633,7 @@ impl<'a> StepReader<'a> {
             None => -1,
         };
 
-        if id >= 0 {
-            id
-        } else {
-            curve_id
-        }
+        if id >= 0 { id } else { curve_id }
     }
 
     /// n points along a curve entity: a B-spline or a circle arc between the vertices, else the two vertices.
@@ -1948,11 +1940,7 @@ fn edge_refs(r: &StepReader, ec_ref: i32) -> Vec<i32> {
 fn edge_geom_id(r: &StepReader, ec_ref: i32) -> i32 {
     let refs = edge_refs(r, ec_ref);
 
-    if refs.len() >= 3 {
-        refs[2]
-    } else {
-        -1
-    }
+    if refs.len() >= 3 { refs[2] } else { -1 }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

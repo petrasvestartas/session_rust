@@ -1,14 +1,14 @@
-use crate::mini_test::TestResult;
-use crate::tolerance::TOLERANCE;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
+use crate::tolerance::TOLERANCE;
 
 pub fn run_obb_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
+        use crate::OBB;
         use crate::Point;
         use crate::Vector;
-        use crate::OBB;
 
         let mut bb1 = OBB::from_point(&Point::new(5.0, 5.0, 5.0), 2.0);
 
@@ -40,8 +40,14 @@ pub fn run_obb_constructor() -> TestResult {
         MINI_CHECK!(box_ == same);
         MINI_CHECK!(box_ != bb1);
         MINI_CHECK!(box_.guid() != same.guid());
-        MINI_CHECK!(box_.str() == "0.000000, 0.000000, 0.000000\n1.000000, 0.000000, 0.000000\n0.000000, 1.000000, 0.000000\n0.000000, 0.000000, 1.000000\n1.000000, 2.000000, 3.000000");
-        MINI_CHECK!(box_.repr() == "OBB(my_obb, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 1.000000, 2.000000, 3.000000)");
+        MINI_CHECK!(
+            box_.str()
+                == "0.000000, 0.000000, 0.000000\n1.000000, 0.000000, 0.000000\n0.000000, 1.000000, 0.000000\n0.000000, 0.000000, 1.000000\n1.000000, 2.000000, 3.000000"
+        );
+        MINI_CHECK!(
+            box_.repr()
+                == "OBB(my_obb, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 1.000000, 2.000000, 3.000000)"
+        );
 
         let bb_aabb = bb2.aabb();
 
@@ -80,8 +86,8 @@ pub fn run_obb_constructor() -> TestResult {
 
 pub fn run_obb_collision() -> TestResult {
     MINI_TEST!("Collision", {
-        use crate::Point;
         use crate::OBB;
+        use crate::Point;
 
         let bb1 = OBB::from_point(&Point::new(0.0, 0.0, 0.0), 1.0);
         let bb2 = OBB::from_point(&Point::new(1.5, 0.0, 0.0), 1.0);
@@ -100,9 +106,9 @@ pub fn run_obb_collision() -> TestResult {
 
 pub fn run_obb_transformation() -> TestResult {
     MINI_TEST!("Transformation", {
+        use crate::OBB;
         use crate::Point;
         use crate::Xform;
-        use crate::OBB;
 
         let pts = vec![Point::new(0.0, 0.0, 0.0), Point::new(1.0, 1.0, 0.0)];
         let mut bb = OBB::from_points(&pts, 0.0, None);
@@ -119,8 +125,8 @@ pub fn run_obb_transformation() -> TestResult {
 
 pub fn run_obb_json_roundtrip() -> TestResult {
     MINI_TEST!("Json Roundtrip", {
-        use crate::Point;
         use crate::OBB;
+        use crate::Point;
 
         let mut bb = OBB::from_point(&Point::new(1.0, 2.0, 3.0), 5.0);
         bb.name = "test_bbox".to_string();
@@ -153,8 +159,8 @@ pub fn run_obb_json_roundtrip() -> TestResult {
 
 pub fn run_obb_protobuf_roundtrip() -> TestResult {
     MINI_TEST!("Protobuf Roundtrip", {
-        use crate::Point;
         use crate::OBB;
+        use crate::Point;
 
         let mut bb = OBB::from_point(&Point::new(1.0, 2.0, 3.0), 5.0);
         bb.name = "test_bbox_proto".to_string();
@@ -189,8 +195,8 @@ pub fn run_obb_protobuf_roundtrip() -> TestResult {
 
 pub fn run_obb_accessors() -> TestResult {
     MINI_TEST!("Accessors", {
-        use crate::Point;
         use crate::OBB;
+        use crate::Point;
 
         let pts = vec![
             Point::new(0.0, 0.0, 0.0),
@@ -226,17 +232,17 @@ pub fn run_obb_accessors() -> TestResult {
 
 pub fn run_obb_from_geometry() -> TestResult {
     MINI_TEST!("From Geometry", {
+        use crate::AABB;
         use crate::Color;
         use crate::Line;
         use crate::NurbsCurve;
         use crate::NurbsSurface;
+        use crate::OBB;
         use crate::Point;
         use crate::PointCloud;
         use crate::Polyline;
         use crate::Primitives;
         use crate::Vector;
-        use crate::AABB;
-        use crate::OBB;
 
         let bb_aabb = OBB::from_aabb(&AABB::new(1.0, 2.0, 3.0, 0.5, 1.0, 1.5));
 
@@ -340,9 +346,9 @@ pub fn run_obb_from_geometry() -> TestResult {
 
 pub fn run_obb_from_plane() -> TestResult {
     MINI_TEST!("From Plane", {
+        use crate::OBB;
         use crate::Plane;
         use crate::Point;
-        use crate::OBB;
 
         let plane = Plane::xy_plane();
         let box_ = OBB::from_plane(&plane, 2.0, 3.0, 4.0);
@@ -368,9 +374,9 @@ pub fn run_obb_from_plane() -> TestResult {
 
 pub fn run_obb_two_rectangles() -> TestResult {
     MINI_TEST!("Two Rectangles", {
+        use crate::OBB;
         use crate::Point;
         use crate::Vector;
-        use crate::OBB;
 
         let bb = OBB::new(
             Point::new(1.0, 2.0, 3.0),

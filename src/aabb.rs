@@ -1,5 +1,3 @@
-use crate::tolerance::Tolerance;
-use crate::tolerance::TOLERANCE;
 use crate::Line;
 use crate::Mesh;
 use crate::NurbsCurve;
@@ -9,6 +7,8 @@ use crate::PointCloud;
 use crate::Polyline;
 use crate::Vector;
 use crate::Xform;
+use crate::tolerance::TOLERANCE;
+use crate::tolerance::Tolerance;
 use std::fmt;
 
 const NUM_SAMPLES: usize = 20; // Samples per span when searching curve extrema.

@@ -1,12 +1,12 @@
 use crate::BRep;
 use crate::Line;
 use crate::Mesh;
+use crate::OBB;
 use crate::Plane;
 use crate::Point;
 use crate::Polyline;
 use crate::Vector;
 use crate::Xform;
-use crate::OBB;
 use serde::Deserialize;
 use serde::Serialize;
 use std::cell::Cell;

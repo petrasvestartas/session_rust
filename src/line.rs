@@ -1,10 +1,10 @@
-use crate::tolerance::Tolerance;
-use crate::tolerance::TOLERANCE;
 use crate::Color;
 use crate::Point;
 use crate::Polyline;
 use crate::Vector;
 use crate::Xform;
+use crate::tolerance::TOLERANCE;
+use crate::tolerance::Tolerance;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeSet;
@@ -117,13 +117,13 @@ pub struct Line {
     _y1: f64, // End y.
     #[serde(rename = "z1")]
     _z1: f64, // End z.
-    pub name: String,     // Line name.
+    pub name: String, // Line name.
     #[serde(default = "crate::file_encoders::default_visible")]
     pub is_visible: bool, // Whether a viewer draws it.
     #[serde(default)]
-    pub is_locked: bool,  // Whether a viewer keeps it from moving.
-    pub width: f64,       // Display width.
-    pub dash: Vec<f64>,   // Dash pattern lengths.
+    pub is_locked: bool, // Whether a viewer keeps it from moving.
+    pub width: f64,   // Display width.
+    pub dash: Vec<f64>, // Dash pattern lengths.
     pub linecolor: Color, // Display color.
     #[serde(default, skip_serializing_if = "Arrowhead::is_none")]
     pub arrowhead: Arrowhead, // Arrowhead ends.

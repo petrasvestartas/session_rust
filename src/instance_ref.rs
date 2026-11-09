@@ -1,8 +1,8 @@
-use crate::element::ElementFeature;
-use crate::tolerance::Tolerance;
-use crate::tolerance::TOLERANCE;
 use crate::Color;
 use crate::Xform;
+use crate::element::ElementFeature;
+use crate::tolerance::TOLERANCE;
+use crate::tolerance::Tolerance;
 use serde::Deserialize;
 use serde::Serialize;
 use std::fmt;

@@ -1,7 +1,7 @@
-use crate::mini_test::TestResult;
 use crate::MINI_CHECK;
 use crate::MINI_TEST;
 use crate::REGISTER_MINI_TEST;
+use crate::mini_test::TestResult;
 
 pub fn run_objects_constructor() -> TestResult {
     MINI_TEST!("Constructor", {
@@ -172,10 +172,10 @@ pub fn run_objects_component_json_roundtrip() -> TestResult {
 
 pub fn run_objects_objects_component_json_roundtrip() -> TestResult {
     MINI_TEST!("Objects Component Json Roundtrip", {
-        use crate::file_encoders::file_json_dump;
-        use crate::file_encoders::file_json_load;
         use crate::Component;
         use crate::Objects;
+        use crate::file_encoders::file_json_dump;
+        use crate::file_encoders::file_json_load;
 
         let mut original = Objects::new();
         let mut component = Component::new();

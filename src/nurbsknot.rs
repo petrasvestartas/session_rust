@@ -69,11 +69,7 @@ pub fn domain_tolerance(a: f64, b: f64) -> f64 {
     let epsilon = f64::EPSILON;
     let tol = (a.abs() + b.abs() + (a - b).abs()) * epsilon.sqrt();
 
-    if tol < epsilon {
-        epsilon
-    } else {
-        tol
-    }
+    if tol < epsilon { epsilon } else { tol }
 }
 
 /// Return a clamped uniform nurbsknot vector, or an empty vector for invalid arguments.
