@@ -1724,13 +1724,13 @@ impl Polyline {
             return self.duplicate();
         }
 
-        let total = self.length();
+        let step = self.length() / (count - 1) as f64;
         let mut result = self.duplicate();
         result.coords.clear();
         result.add_point(self.point(0));
 
         for i in 1..count - 1 {
-            result.add_point(self.point_at_length(total * i as f64 / (count - 1) as f64));
+            result.add_point(self.point_at_length(step * i as f64));
         }
 
         result.add_point(self.point(self.point_count() - 1));
@@ -1743,10 +1743,11 @@ impl Polyline {
         let count = a.point_count().max(b.point_count());
         let pa = a.resampled(count);
         let pb = b.resampled(count);
+        let n = pa.point_count().min(pb.point_count());
         let mut result = a.duplicate();
         result.coords.clear();
 
-        for i in 0..pa.point_count().min(pb.point_count()) {
+        for i in 0..n {
             result.add_point(Point::lerp(&pa.point(i), &pb.point(i), t));
         }
 

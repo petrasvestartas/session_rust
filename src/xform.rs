@@ -818,74 +818,14 @@ impl Xform {
 
     /// Return the blend at t in [0, 1]: translation and axis scales lerped, rotation slerped.
     pub fn interpolate(a: &Xform, b: &Xform, t: f64) -> Xform {
-        let xforms = [a, b];
-        let mut q = [[0.0; 4]; 2];
-        let mut s = [[0.0; 3]; 2];
-
-        for k in 0..2 {
-            let n = &xforms[k].m;
-            let mut r = [[0.0; 3]; 3];
-
-            for c in 0..3 {
-                s[k][c] = (n[c * 4] * n[c * 4]
-                    + n[c * 4 + 1] * n[c * 4 + 1]
-                    + n[c * 4 + 2] * n[c * 4 + 2])
-                    .sqrt();
-
-                for i in 0..3 {
-                    r[i][c] = if s[k][c] > 0.0 {
-                        n[c * 4 + i] / s[k][c]
-                    } else if i == c {
-                        1.0
-                    } else {
-                        0.0
-                    };
-                }
-            }
-
-            let trace = r[0][0] + r[1][1] + r[2][2];
-
-            if trace > 0.0 {
-                let d = 2.0 * (1.0 + trace).sqrt();
-                q[k] = [
-                    0.25 * d,
-                    (r[2][1] - r[1][2]) / d,
-                    (r[0][2] - r[2][0]) / d,
-                    (r[1][0] - r[0][1]) / d,
-                ];
-            } else if r[0][0] > r[1][1] && r[0][0] > r[2][2] {
-                let d = 2.0 * (1.0 + r[0][0] - r[1][1] - r[2][2]).sqrt();
-                q[k] = [
-                    (r[2][1] - r[1][2]) / d,
-                    0.25 * d,
-                    (r[0][1] + r[1][0]) / d,
-                    (r[0][2] + r[2][0]) / d,
-                ];
-            } else if r[1][1] > r[2][2] {
-                let d = 2.0 * (1.0 + r[1][1] - r[0][0] - r[2][2]).sqrt();
-                q[k] = [
-                    (r[0][2] - r[2][0]) / d,
-                    (r[0][1] + r[1][0]) / d,
-                    0.25 * d,
-                    (r[1][2] + r[2][1]) / d,
-                ];
-            } else {
-                let d = 2.0 * (1.0 + r[2][2] - r[0][0] - r[1][1]).sqrt();
-                q[k] = [
-                    (r[1][0] - r[0][1]) / d,
-                    (r[0][2] + r[2][0]) / d,
-                    (r[1][2] + r[2][1]) / d,
-                    0.25 * d,
-                ];
-            }
-        }
-
-        let mut dot = q[0][0] * q[1][0] + q[0][1] * q[1][1] + q[0][2] * q[1][2] + q[0][3] * q[1][3];
+        let sa = a.axis_scales();
+        let sb = b.axis_scales();
+        let qa = a.rotation_quaternion();
+        let mut qb = b.rotation_quaternion();
+        let mut dot = qa[0] * qb[0] + qa[1] * qb[1] + qa[2] * qb[2] + qa[3] * qb[3];
 
         if dot < 0.0 {
-            for i in 0..4 {
-                q[1][i] = -q[1][i];
-            }
+            qb = [-qb[0], -qb[1], -qb[2], -qb[3]];
             dot = -dot;
         }
 
@@ -901,7 +841,7 @@ impl Xform {
         let mut p = [0.0; 4];
 
         for i in 0..4 {
-            p[i] = w0 * q[0][i] + w1 * q[1][i];
+            p[i] = w0 * qa[i] + w1 * qb[i];
         }
 
         let len = (p[0] * p[0] + p[1] * p[1] + p[2] * p[2] + p[3] * p[3]).sqrt();
@@ -909,9 +849,9 @@ impl Xform {
         let x = p[1] / len;
         let y = p[2] / len;
         let z = p[3] / len;
-        let sx = s[0][0] + (s[1][0] - s[0][0]) * t;
-        let sy = s[0][1] + (s[1][1] - s[0][1]) * t;
-        let sz = s[0][2] + (s[1][2] - s[0][2]) * t;
+        let sx = sa[0] + (sb[0] - sa[0]) * t;
+        let sy = sa[1] + (sb[1] - sa[1]) * t;
+        let sz = sa[2] + (sb[2] - sa[2]) * t;
 
         let mut result = Xform::new();
         result.m[0] = (1.0 - 2.0 * (y * y + z * z)) * sx;
@@ -995,6 +935,80 @@ impl Xform {
         rows[0][0] * (rows[1][1] * rows[2][2] - rows[1][2] * rows[2][1])
             - rows[0][1] * (rows[1][0] * rows[2][2] - rows[1][2] * rows[2][0])
             + rows[0][2] * (rows[1][0] * rows[2][1] - rows[1][1] * rows[2][0])
+    }
+
+    /// Return the lengths of the first three columns.
+    fn axis_scales(&self) -> [f64; 3] {
+        let m = &self.m;
+        let mut s = [0.0; 3];
+
+        for c in 0..3 {
+            let x = m[c * 4];
+            let y = m[c * 4 + 1];
+            let z = m[c * 4 + 2];
+            s[c] = (x * x + y * y + z * z).sqrt();
+        }
+
+        s
+    }
+
+    /// Return the rotation part as a unit quaternion [w, x, y, z].
+    fn rotation_quaternion(&self) -> [f64; 4] {
+        let m = &self.m;
+        let s = self.axis_scales();
+        let mut r = [[0.0; 3]; 3];
+
+        for c in 0..3 {
+            for i in 0..3 {
+                r[i][c] = if s[c] > 0.0 {
+                    m[c * 4 + i] / s[c]
+                } else if i == c {
+                    1.0
+                } else {
+                    0.0
+                };
+            }
+        }
+
+        let trace = r[0][0] + r[1][1] + r[2][2];
+
+        if trace > 0.0 {
+            let d = 2.0 * (1.0 + trace).sqrt();
+            return [
+                0.25 * d,
+                (r[2][1] - r[1][2]) / d,
+                (r[0][2] - r[2][0]) / d,
+                (r[1][0] - r[0][1]) / d,
+            ];
+        }
+
+        if r[0][0] > r[1][1] && r[0][0] > r[2][2] {
+            let d = 2.0 * (1.0 + r[0][0] - r[1][1] - r[2][2]).sqrt();
+            return [
+                (r[2][1] - r[1][2]) / d,
+                0.25 * d,
+                (r[0][1] + r[1][0]) / d,
+                (r[0][2] + r[2][0]) / d,
+            ];
+        }
+
+        if r[1][1] > r[2][2] {
+            let d = 2.0 * (1.0 + r[1][1] - r[0][0] - r[2][2]).sqrt();
+            return [
+                (r[0][2] - r[2][0]) / d,
+                (r[0][1] + r[1][0]) / d,
+                0.25 * d,
+                (r[1][2] + r[2][1]) / d,
+            ];
+        }
+
+        let d = 2.0 * (1.0 + r[2][2] - r[0][0] - r[1][1]).sqrt();
+        [
+            (r[1][0] - r[0][1]) / d,
+            (r[0][2] + r[2][0]) / d,
+            (r[1][2] + r[2][1]) / d,
+            0.25 * d,
+        ]
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
