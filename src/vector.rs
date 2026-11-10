@@ -384,47 +384,17 @@ impl Vector {
 
     /// Return the magnitude scaled to stay finite for large components.
     fn compute_magnitude(&self) -> f64 {
-        let mut ax = self._x.abs();
-        let mut ay = self._y.abs();
-        let mut az = self._z.abs();
-        let x_zero = ax < Tolerance::ZERO_TOLERANCE;
-        let y_zero = ay < Tolerance::ZERO_TOLERANCE;
-        let z_zero = az < Tolerance::ZERO_TOLERANCE;
+        let scale = self._x.abs().max(self._y.abs()).max(self._z.abs());
 
-        if x_zero && y_zero && z_zero {
-            return 0.0;
+        if scale > 0.0 && scale.is_finite() {
+            let x = self._x / scale;
+            let y = self._y / scale;
+            let z = self._z / scale;
+
+            return scale * x.hypot(y).hypot(z);
         }
 
-        if x_zero && y_zero {
-            return az;
-        }
-
-        if x_zero && z_zero {
-            return ay;
-        }
-
-        if y_zero && z_zero {
-            return ax;
-        }
-
-        if ay >= ax && ay >= az {
-            std::mem::swap(&mut ax, &mut ay);
-        } else if az >= ax && az >= ay {
-            std::mem::swap(&mut ax, &mut az);
-        }
-
-        if ax > f64::MIN_POSITIVE {
-            ay /= ax;
-            az /= ax;
-
-            return ax * (1.0 + ay * ay + az * az).sqrt();
-        }
-
-        if ax > 0.0 && ax.is_finite() {
-            return ax;
-        }
-
-        0.0
+        self._x.hypot(self._y).hypot(self._z)
     }
 
     /// Return the cached magnitude.
@@ -444,15 +414,23 @@ impl Vector {
 
     /// Set unit length in place; false when the magnitude is zero.
     pub fn normalize_self(&mut self) -> bool {
-        let d = self.compute_magnitude();
-
-        if d <= 0.0 {
+        if !self._x.is_finite() || !self._y.is_finite() || !self._z.is_finite() {
             return false;
         }
 
-        self._x /= d;
-        self._y /= d;
-        self._z /= d;
+        let scale = self._x.abs().max(self._y.abs()).max(self._z.abs());
+
+        if scale == 0.0 {
+            return false;
+        }
+
+        let x = self._x / scale;
+        let y = self._y / scale;
+        let z = self._z / scale;
+        let length = x.hypot(y).hypot(z);
+        self._x = x / length;
+        self._y = y / length;
+        self._z = z / length;
         self._magnitude.set(1.0);
         self._has_magnitude.set(true);
 

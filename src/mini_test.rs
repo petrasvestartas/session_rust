@@ -802,6 +802,16 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Vector",
+            name: "Magnitude Preserves Differential Scale",
+            func: run_vector_magnitude_preserves_differential_scale,
+        },
+        RegisteredTest {
+            group: "Vector",
+            name: "Normalize Extreme And Invalid Vectors",
+            func: run_vector_normalize_extreme_and_invalid_vectors,
+        },
+        RegisteredTest {
+            group: "Vector",
             name: "Normalize",
             func: run_vector_normalize,
         },

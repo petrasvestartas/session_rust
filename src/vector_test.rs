@@ -114,6 +114,57 @@ pub fn run_vector_magnitude() -> TestResult {
     })
 }
 
+pub fn run_vector_magnitude_preserves_differential_scale() -> TestResult {
+    MINI_TEST!("Magnitude Preserves Differential Scale", {
+        use crate::Vector;
+
+        for scale in [1e-300, 1e-19, 1e-13, 1.0, 1e150, 1e300] {
+            let mut value = Vector::new(3.0 * scale, 4.0 * scale, 12.0 * scale);
+            let length = value.magnitude();
+            MINI_CHECK!(length.is_finite() && length > 0.0);
+            MINI_CHECK!((length / scale - 13.0).abs() <= 1e-13);
+            MINI_CHECK!(value.normalize_self());
+            MINI_CHECK!((value[0] - 3.0 / 13.0).abs() <= 1e-15);
+            MINI_CHECK!((value[1] - 4.0 / 13.0).abs() <= 1e-15);
+            MINI_CHECK!((value[2] - 12.0 / 13.0).abs() <= 1e-15);
+        }
+        let minimum = f64::from_bits(1);
+        let subnormal = Vector::new(minimum, 0.0, 0.0);
+        MINI_CHECK!(subnormal.magnitude() == minimum);
+        let tangent = Vector::new(2.5e-19, 2.5e-19, 0.0);
+        MINI_CHECK!((tangent.magnitude() / 2.5e-19 - 2.0_f64.sqrt()).abs() < 1e-15);
+    })
+}
+
+pub fn run_vector_normalize_extreme_and_invalid_vectors() -> TestResult {
+    MINI_TEST!("Normalize Extreme And Invalid Vectors", {
+        use crate::Vector;
+
+        for scale in [f64::from_bits(1), 1.7e308] {
+            let mut value = Vector::new(scale, scale, scale);
+            MINI_CHECK!(value.normalize_self());
+            for d in 0..3 {
+                MINI_CHECK!((value[d] - 1.0 / 3.0_f64.sqrt()).abs() <= 1e-15);
+            }
+            MINI_CHECK!((value.magnitude_squared() - 1.0).abs() <= 1e-15);
+        }
+        for invalid in [f64::INFINITY, f64::NEG_INFINITY, f64::NAN] {
+            for d in 0..3 {
+                let mut value = Vector::new(1.0, 2.0, 3.0);
+                value[d] = invalid;
+                MINI_CHECK!(!value.normalize_self());
+                MINI_CHECK!(if invalid.is_nan() {
+                    value[d].is_nan()
+                } else {
+                    value[d] == invalid
+                });
+            }
+        }
+        let mut zero = Vector::default();
+        MINI_CHECK!(!zero.normalize_self());
+    })
+}
+
 pub fn run_vector_normalize() -> TestResult {
     MINI_TEST!("Normalize", {
         use crate::Vector;
@@ -568,6 +619,16 @@ REGISTER_MINI_TEST!(
     "Vector",
     "Magnitude",
     crate::vector_test::run_vector_magnitude
+);
+REGISTER_MINI_TEST!(
+    "Vector",
+    "Magnitude Preserves Differential Scale",
+    crate::vector_test::run_vector_magnitude_preserves_differential_scale
+);
+REGISTER_MINI_TEST!(
+    "Vector",
+    "Normalize Extreme And Invalid Vectors",
+    crate::vector_test::run_vector_normalize_extreme_and_invalid_vectors
 );
 REGISTER_MINI_TEST!(
     "Vector",
