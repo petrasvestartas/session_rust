@@ -2300,14 +2300,6 @@ impl Session {
         self.revision += 1;
     }
 
-    /// Set a local transform and record its presentation duration and delay.
-    pub fn animate_xform(&mut self, guid: &str, xform: Xform, duration_ms: f64, delay_ms: f64) {
-        self.set_xform(guid, xform);
-        self.graph
-            .set_vertex_attribute(guid, "xform_ms", duration_ms);
-        self.graph.set_vertex_attribute(guid, "delay_ms", delay_ms);
-    }
-
     /// Remove an object's local transform, returning whether one was present.
     pub fn remove_xform(&mut self, guid: &str) -> bool {
         let Some(before) = self.xforms.get(guid).cloned() else {

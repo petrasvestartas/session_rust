@@ -4876,31 +4876,3 @@ REGISTER_MINI_TEST!(
     "Set Node Color Descendants",
     crate::session_test::run_session_set_node_color_descendants
 );
-
-pub fn run_session_animate_xform() -> TestResult {
-    MINI_TEST!("Animate Xform", {
-        use crate::Point;
-        use crate::Session;
-        use crate::Xform;
-
-        let mut session = Session::default();
-        let point = Point::new(1.0, 2.0, 3.0);
-        let guid = point.guid().to_string();
-        let xform = Xform::translation(4.0, 5.0, 6.0);
-        session.add_point(point, None);
-        session.animate_xform(&guid, xform.clone(), 900.0, 150.0);
-        let restored = Session::pb_loads(&session.pb_dumps()).unwrap();
-        let duration = restored.graph.vertex_attribute(&guid, "xform_ms");
-        let delay = restored.graph.vertex_attribute(&guid, "delay_ms");
-
-        MINI_CHECK!(restored.xform(&guid) == xform);
-        MINI_CHECK!(duration == Some(900.0));
-        MINI_CHECK!(delay == Some(150.0));
-    })
-}
-
-REGISTER_MINI_TEST!(
-    "Session",
-    "Animate Xform",
-    crate::session_test::run_session_animate_xform
-);

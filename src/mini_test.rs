@@ -1957,11 +1957,6 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
             name: "Component",
             func: run_text_component,
         },
-        RegisteredTest {
-            group: "Session",
-            name: "Animate Xform",
-            func: run_session_animate_xform,
-        },
         // Mesh tests
         RegisteredTest {
             group: "Mesh",
