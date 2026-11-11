@@ -1709,6 +1709,80 @@ impl Session {
         self.add_component(text.to_component(), parent)
     }
 
+    /// Add a net as the group "network": a point n<i> per row of coordinates (x, y, z), a line e<j> per row of connectivity (1 at its start node, -1 at its end node) and a graph edge between the two points of every line; colors and widths, when not empty, hold one per line. None, and nothing added, when the shapes do not fit or a row lacks its 1 or its -1.
+    pub fn add_network(
+        &mut self,
+        connectivity: &Matrix,
+        coordinates: &Matrix,
+        colors: &[Color],
+        widths: &[f64],
+        parent: Option<&Rc<RefCell<TreeNode>>>,
+    ) -> Option<Rc<RefCell<TreeNode>>> {
+        let m = connectivity.rows;
+        let n = coordinates.rows;
+
+        if coordinates.cols != 3 || connectivity.cols != n {
+            return None;
+        }
+
+        if (!colors.is_empty() && colors.len() != m) || (!widths.is_empty() && widths.len() != m) {
+            return None;
+        }
+
+        let mut ends = Vec::with_capacity(m);
+
+        for j in 0..m {
+            let mut start = None;
+            let mut end = None;
+
+            for i in 0..n {
+                if connectivity[(j, i)] > 0.0 && start.is_none() {
+                    start = Some(i);
+                } else if connectivity[(j, i)] < 0.0 && end.is_none() {
+                    end = Some(i);
+                }
+            }
+
+            ends.push((start?, end?));
+        }
+
+        let group = self.add_group_with("network", parent);
+        let mut guids = Vec::with_capacity(n);
+
+        for i in 0..n {
+            let mut point = Point::new(coordinates[(i, 0)], coordinates[(i, 1)], coordinates[(i, 2)]);
+            point.name = format!("n{i}");
+            guids.push(point.guid().to_string());
+            self.add_point(point, Some(&group));
+        }
+
+        for (j, (start, end)) in ends.into_iter().enumerate() {
+            let mut line = Line::new(
+                coordinates[(start, 0)],
+                coordinates[(start, 1)],
+                coordinates[(start, 2)],
+                coordinates[(end, 0)],
+                coordinates[(end, 1)],
+                coordinates[(end, 2)],
+            );
+            line.name = format!("e{j}");
+
+            if !colors.is_empty() {
+                line.linecolor = colors[j].clone();
+            }
+
+            if !widths.is_empty() {
+                line.width = widths[j];
+            }
+
+            let name = line.name.clone();
+            self.add_line(line, Some(&group));
+            self.add_edge(&guids[start], &guids[end], &name);
+        }
+
+        Some(group)
+    }
+
     /// Add a definition, geometry in its own frame that instances share; returns its guid, also when that guid is already defined, and "" for a guid an object, instance or component holds.
     pub fn add_definition(&mut self, definition: Geometry) -> String {
         let guid = definition.guid().to_string();

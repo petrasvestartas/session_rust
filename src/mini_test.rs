@@ -3649,6 +3649,11 @@ pub fn get_all_tests() -> Vec<RegisteredTest> {
         },
         RegisteredTest {
             group: "Session",
+            name: "Add Network",
+            func: run_session_add_network,
+        },
+        RegisteredTest {
+            group: "Session",
             name: "Component Json Roundtrip",
             func: run_session_component_json_roundtrip,
         },

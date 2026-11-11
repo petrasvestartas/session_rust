@@ -1234,6 +1234,33 @@ pub fn run_session_add_matrix() -> TestResult {
     })
 }
 
+pub fn run_session_add_network() -> TestResult {
+    MINI_TEST!("Add Network", {
+        use crate::Color;
+        use crate::Matrix;
+        use crate::Session;
+
+        let mut session = Session::default();
+        let connectivity = Matrix::from_rows(&[vec![1.0, -1.0, 0.0], vec![1.0, 0.0, -1.0]]);
+        let coordinates = Matrix::from_rows(&[vec![0.0, 0.0, 1.0], vec![2.0, 0.0, 0.0], vec![0.0, 3.0, 0.0]]);
+        let colors = vec![Color::new(1.0, 0.0, 0.0, 1.0), Color::new(0.0, 0.0, 1.0, 1.0)];
+        let widths = vec![2.0, 4.0];
+
+        let group = session.add_network(&connectivity, &coordinates, &colors, &widths, None);
+        let points = session.objects.points.clone();
+        let lines = session.objects.lines.clone();
+        let refused = session.add_network(&connectivity, &Matrix::zeros(2, 3), &[], &[], None);
+
+        MINI_CHECK!(group.is_some() && group.unwrap().borrow().name == "network");
+        MINI_CHECK!(points.len() == 3 && lines.len() == 2);
+        MINI_CHECK!(points[0].name == "n0" && points[2][1] == 3.0);
+        MINI_CHECK!(lines[1].name == "e1" && lines[1].end()[1] == 3.0);
+        MINI_CHECK!(lines[0].linecolor == colors[0] && lines[1].width == 4.0);
+        MINI_CHECK!(session.graph.has_edge((points[0].guid(), points[2].guid())));
+        MINI_CHECK!(refused.is_none() && session.objects.points.len() == 3);
+    })
+}
+
 pub fn run_session_component_json_roundtrip() -> TestResult {
     MINI_TEST!("Component Json Roundtrip", {
         use crate::Component;
@@ -4513,6 +4540,11 @@ REGISTER_MINI_TEST!(
     "Session",
     "Add Matrix",
     crate::session_test::run_session_add_matrix
+);
+REGISTER_MINI_TEST!(
+    "Session",
+    "Add Network",
+    crate::session_test::run_session_add_network
 );
 REGISTER_MINI_TEST!(
     "Session",
