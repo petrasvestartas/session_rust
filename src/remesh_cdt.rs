@@ -585,7 +585,7 @@ impl Delaunay {
             let spans = if left {
                 pr[0] > pb[0] && pl[0] < pa[0]
             } else {
-                pr[0] < pb[0] && pl[0] > pa[0]
+                pl[0] < pb[0] && pr[0] > pa[0]
             };
 
             if spans && eb[1] > pa[1] && et[1] < pb[1] && segments_intersect(eb, et, pb, pa) {

@@ -574,6 +574,27 @@ pub fn run_remesh_cdt_collinear_boundary_runs() -> TestResult {
     })
 }
 
+pub fn run_remesh_cdt_hole_beside_a_leaning_border() -> TestResult {
+    MINI_TEST!("Hole Beside A Leaning Border", {
+        use crate::Point;
+
+        let border = vec![
+            Point::new(-444.0, -599.0, 0.0),
+            Point::new(-324.0, -552.0, 0.0),
+            Point::new(323.0, -599.0, 0.0),
+            Point::new(-303.0, 875.0, 0.0),
+        ];
+        let hole = vec![
+            Point::new(-331.0, -53.0, 0.0),
+            Point::new(-291.0, -56.0, 0.0),
+            Point::new(-297.0, -123.0, 0.0),
+            Point::new(-338.0, -120.0, 0.0),
+        ];
+
+        MINI_CHECK!(run_covers(&border, &[hole]));
+    })
+}
+
 pub fn run_remesh_cdt_plate_four_holes() -> TestResult {
     MINI_TEST!("Plate Four Holes", {
         use crate::Point;
@@ -715,6 +736,11 @@ REGISTER_MINI_TEST!(
     "RemeshCDT",
     "Collinear Boundary Runs",
     crate::remesh_cdt_test::run_remesh_cdt_collinear_boundary_runs
+);
+REGISTER_MINI_TEST!(
+    "RemeshCDT",
+    "Hole Beside A Leaning Border",
+    crate::remesh_cdt_test::run_remesh_cdt_hole_beside_a_leaning_border
 );
 REGISTER_MINI_TEST!(
     "RemeshCDT",
